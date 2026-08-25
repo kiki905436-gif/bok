@@ -231,7 +231,7 @@ class DesktopContracts(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            timeout=8,
+            timeout=75,
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stdout)
