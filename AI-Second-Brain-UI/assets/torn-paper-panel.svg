@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" preserveAspectRatio="none">
+  <defs>
+    <filter id="tear-panel" x="-8%" y="-10%" width="116%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.036" numOctaves="5" seed="73" result="fiber"/>
+      <feDisplacementMap in="SourceGraphic" in2="fiber" scale="15" xChannelSelector="R" yChannelSelector="B"/>
+    </filter>
+  </defs>
+  <path fill="#fff" filter="url(#tear-panel)" d="M18 20 168 15 296 22 425 16 554 21 684 14 814 22 944 16 1182 21 1178 145 1186 257 1178 370 1187 484 1179 596 1183 742 1025 737 884 745 743 738 603 746 462 737 322 744 181 737 17 745 23 610 14 496 24 382 13 268 24 154Z"/>
+</svg>

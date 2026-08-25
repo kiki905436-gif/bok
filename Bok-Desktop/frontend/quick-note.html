@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Boujoy 独立随手记" />
+    <title>Boujoy 随手记</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./quick-note-window.css?v=20260824-2" />
+  </head>
+  <body>
+    <main class="note-sheet">
+      <header class="drag-handle" id="dragHandle">
+        <div><span class="note-mark">＋</span><h1>随手记</h1></div>
+        <span class="connection" id="connection" role="status">本机</span>
+      </header>
+      <form id="noteForm">
+        <textarea id="noteValue" maxlength="20000" autofocus aria-label="随手记内容" placeholder="现在想到什么？"></textarea>
+        <div class="note-meta"><span id="draftState">草稿保存在本机</span><span id="noteCount">0 / 20000</span></div>
+        <button id="noteSave" type="submit">记下来 <kbd>⌘↵</kbd></button>
+      </form>
+    </main>
+    <script src="./quick-note-window.js?v=20260824-2" defer></script>
+  </body>
+</html>

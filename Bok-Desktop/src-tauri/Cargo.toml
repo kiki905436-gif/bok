@@ -1,0 +1,23 @@
+[package]
+name = "bok-desktop"
+version = "0.6.0"
+description = "Bok local-first second brain desktop shell"
+authors = ["Boujoy"]
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+name = "bok_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1"
+tauri = { version = "2.11.4", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Threading"] }

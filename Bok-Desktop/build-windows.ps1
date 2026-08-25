@@ -1,0 +1,46 @@
+param(
+    [string]$Python = "python",
+    [string]$Cargo = "cargo"
+)
+
+$ErrorActionPreference = "Stop"
+$Project = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Workspace = Split-Path -Parent $Project
+$Version = "0.6.0"
+$Runtime = Join-Path $env:TEMP "bok-python-3.13.15-embed-amd64"
+$Output = Join-Path $Workspace "_dist\Bok-Desktop-$Version-Windows"
+
+& $Python (Join-Path $Project "scripts\fetch_windows_python.py") $Runtime
+& $Python (Join-Path $Project "scripts\prepare_share.py") `
+    --workspace $Workspace `
+    --windows-python $Runtime `
+    --deny $env:USERNAME
+if ($LASTEXITCODE -ne 0) { throw "Bok 分享资源准备失败。" }
+
+& $Python (Join-Path $Project "scripts\test_desktop_contracts.py")
+if ($LASTEXITCODE -ne 0) { throw "Bok 桌面契约测试失败。" }
+
+Push-Location $Project
+try {
+    $PreviousRustFlags = $env:RUSTFLAGS
+    $env:RUSTFLAGS = "--remap-path-prefix=$Project=Bok-Desktop --remap-path-prefix=$env:USERPROFILE=LOCAL_BUILD_HOME"
+    & $Cargo tauri build --bundles nsis
+    if ($LASTEXITCODE -ne 0) { throw "Bok Windows 构建失败。" }
+} finally {
+    $env:RUSTFLAGS = $PreviousRustFlags
+    Pop-Location
+}
+
+$Installer = Get-ChildItem (Join-Path $Project "target\release\bundle\nsis\*.exe") |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if (-not $Installer) { throw "没有找到 NSIS 安装包。" }
+
+if (Test-Path $Output) { Remove-Item $Output -Recurse -Force }
+New-Item -ItemType Directory -Path $Output | Out-Null
+$Target = Join-Path $Output "Bok_${Version}_x64-setup.exe"
+Copy-Item $Installer.FullName $Target
+& $Python (Join-Path $Project "scripts\privacy_audit.py") $Target --deny $env:USERNAME
+if ($LASTEXITCODE -ne 0) { throw "Bok Windows 安装包隐私扫描失败。" }
+
+Write-Host "Bok Windows 分享版已生成：$Target"

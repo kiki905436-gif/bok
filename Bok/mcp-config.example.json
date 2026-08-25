@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "bok": {
+      "command": "/usr/bin/python3",
+      "args": [
+        "-m",
+        "bok_core",
+        "--vault",
+        "/absolute/path/to/your/vault",
+        "mcp"
+      ],
+      "env": {
+        "PYTHONPATH": "/absolute/path/to/your/vault/Bok",
+        "PYTHONPYCACHEPREFIX": "/tmp/bok-pycache"
+      }
+    }
+  }
+}

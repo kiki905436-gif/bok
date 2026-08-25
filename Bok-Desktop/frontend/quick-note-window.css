@@ -1,0 +1,109 @@
+@font-face {
+  font-family: "Fusion Pixel";
+  src: url("./assets/fusion-pixel-10px-proportional-zh_hans.otf.woff2") format("woff2");
+  font-display: swap;
+}
+
+:root {
+  color: #172b2d;
+  background: #e8ddc4;
+  font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body { min-height: 100%; margin: 0; }
+
+body {
+  min-width: 280px;
+  padding: 12px;
+  background:
+    linear-gradient(rgba(239, 229, 208, 0.72), rgba(239, 229, 208, 0.72)),
+    url("./assets/boujoy-knowledge-pop-collage-v2.png") center / cover fixed;
+}
+
+.note-sheet {
+  position: relative;
+  display: grid;
+  min-height: calc(100vh - 24px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(45, 39, 31, 0.22);
+  border-radius: 5px 13px 7px 11px;
+  background:
+    repeating-linear-gradient(0deg, rgba(63, 48, 34, 0.018) 0 1px, transparent 1px 4px),
+    #fffaf0;
+  box-shadow: 7px 8px 0 rgba(31, 54, 74, 0.16), 0 18px 46px rgba(49, 39, 26, 0.17);
+}
+
+.note-sheet::before {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 88px;
+  height: 21px;
+  background: rgba(109, 223, 216, 0.45);
+  content: "";
+  pointer-events: none;
+  transform: translateX(-50%) rotate(-1.5deg);
+}
+
+.drag-handle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 22px 13px;
+  cursor: move;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.drag-handle > div { display: flex; align-items: center; gap: 9px; }
+.note-mark { color: #ff3e91; font: 24px/1 "Fusion Pixel", monospace; }
+h1 { margin: 0; font: 25px/1 "Fusion Pixel", "Microsoft YaHei UI", sans-serif; letter-spacing: 0.02em; }
+.connection { padding: 4px 7px; border: 1px solid #1c8d83; color: #12675f; background: #dff7ef; cursor: pointer; font-size: 10px; }
+.connection.is-error { border-color: #cf4747; color: #a82e2e; background: #ffe4e0; }
+
+form { display: grid; min-height: 0; grid-template-rows: minmax(0, 1fr) auto auto; padding: 0 18px 18px; }
+textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 18px;
+  resize: none;
+  border: 0;
+  border-top: 2px solid #172b2d;
+  border-bottom: 1px dashed rgba(23, 43, 45, 0.3);
+  outline: 0;
+  color: #172b2d;
+  background:
+    repeating-linear-gradient(transparent 0 29px, rgba(62, 94, 109, 0.13) 29px 30px),
+    transparent;
+  font: 15px/30px inherit;
+}
+
+textarea::placeholder { color: rgba(23, 43, 45, 0.38); }
+textarea:focus { box-shadow: inset 4px 0 0 #22afa1; }
+.note-meta { display: flex; justify-content: space-between; gap: 10px; padding: 9px 2px; color: #6b746f; font-size: 10px; }
+button {
+  min-height: 46px;
+  border: 2px solid #172b2d;
+  color: white;
+  background: #172b2d;
+  box-shadow: 4px 4px 0 #ff3e91;
+  cursor: pointer;
+  font: 14px "Fusion Pixel", "Microsoft YaHei UI", sans-serif;
+}
+
+button:hover { background: #087f73; transform: translate(-1px, -1px); }
+button:disabled { cursor: wait; opacity: 0.62; }
+kbd { margin-left: 4px; color: rgba(255,255,255,.65); font: 9px inherit; }
+
+@media (max-width: 340px) {
+  body { padding: 7px; }
+  .note-sheet { min-height: calc(100vh - 14px); }
+  .drag-handle { padding-right: 15px; padding-left: 15px; }
+  form { padding-right: 12px; padding-left: 12px; }
+}

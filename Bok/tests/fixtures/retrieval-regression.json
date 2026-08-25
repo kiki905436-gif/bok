@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Privacy-safe release queries for Bok's clean Starter Vault.",
+  "cases": [
+    {
+      "id": "starter-title",
+      "query": "第一次使用 Bok",
+      "expected_top1": "02-Projects/welcome-to-bok.md"
+    },
+    {
+      "id": "resume-project",
+      "query": "接着上次的持续项目",
+      "expected_top1": "02-Projects/welcome-to-bok.md"
+    },
+    {
+      "id": "deduplicate-knowledge-card",
+      "query": "知识卡如何避免重复",
+      "expected_top1": "03-Knowledge/knowledge-card-example.md"
+    },
+    {
+      "id": "cite-markdown",
+      "query": "回答引用原始 Markdown",
+      "expected_top1": "03-Knowledge/knowledge-card-example.md"
+    },
+    {
+      "id": "agent-memory-setup",
+      "query": "Agent 自动记忆怎么启用",
+      "expected_top1": "00-System/Agent-Connection.md"
+    },
+    {
+      "id": "explicit-index-query",
+      "query": "Memory-Index",
+      "expected_top1": "00-System/Memory-Index.md"
+    }
+  ]
+}

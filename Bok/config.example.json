@@ -1,0 +1,31 @@
+{
+  "host": "127.0.0.1",
+  "port": 8771,
+  "local_only": true,
+  "max_context_tokens": 2500,
+  "max_search_results": 6,
+  "provider": "auto",
+  "provider_model": "",
+  "provider_base_url": "",
+  "provider_api_key_ref": "",
+  "auto_start_local_model": true,
+  "embedding_provider": "none",
+  "embedding_model": "",
+  "semantic_full_scan_limit": 6000,
+  "embedding_batch_size": 32,
+  "conversation_retention_days": 14,
+  "personal_core_root": "",
+  "deferred_search_prefixes": [
+    ".codebuddy",
+    ".workbuddy",
+    "02-Projects/model-comparison-benchmark",
+    "90-Archive",
+    "Self-Media-Lottie-Pack",
+    "mario-1-1",
+    "mario-clone",
+    "platform-game",
+    "project",
+    "tools",
+    "xingya-adventure"
+  ]
+}

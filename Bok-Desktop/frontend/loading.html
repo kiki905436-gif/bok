@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bok 正在启动</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #05070c; color: #f5f1df; overflow: hidden; }
+    body::before { content: ""; position: fixed; inset: 0; opacity: .32; background: radial-gradient(circle at 18% 28%, #1c29ff 0 2%, transparent 23%), radial-gradient(circle at 82% 74%, #ff2d91 0 1%, transparent 26%), linear-gradient(118deg, transparent 0 45%, #c8ff0030 45% 49%, transparent 49% 100%); }
+    main { position: relative; width: min(560px, calc(100vw - 48px)); padding: 42px; border: 1px solid #2e3644; background: #0c1018e8; box-shadow: 12px 12px 0 #1726d8, -7px -7px 0 #ff2d91; animation: arrive .34s ease-out both; }
+    .brand { display: flex; align-items: center; gap: 20px; }
+    .mark { display: block; width: 82px; height: 82px; border-radius: 18px; object-fit: cover; image-rendering: pixelated; box-shadow: 7px 7px 0 #ff2d91; }
+    h1 { margin: 0; font-size: 30px; }
+    p { margin: 22px 0 0; color: #aab3c2; line-height: 1.7; }
+    .bar { height: 5px; margin-top: 30px; overflow: hidden; background: #212936; }
+    .bar::after { content: ""; display: block; width: 38%; height: 100%; background: #39e5dd; animation: loading .56s ease-in-out infinite alternate; }
+    .error { color: #ff859d; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
+    @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img class="mark" src="bok-k-icon.png" alt="Bok K"><div><h1>Bok 正在连接本地知识库</h1><p id="status">第一次启动会准备一份干净的 Starter Vault，之后不会覆盖你的内容。</p></div></div>
+    <div class="bar" id="bar"></div>
+  </main>
+  <script>
+    window.showStartupError = (message) => {
+      document.querySelector("#status").textContent = message;
+      document.querySelector("#status").classList.add("error");
+      document.querySelector("#bar").hidden = true;
+    };
+  </script>
+</body>
+</html>

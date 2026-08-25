@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.pyc
+.bok/
+Bok-Desktop/target/
+Bok-Desktop/build-resources/
+Bok-Desktop/src-tauri/binaries/
+_dist/

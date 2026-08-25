@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Boujoy知识库的本地工作台" />
+    <title>Boujoy知识库</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css?v=20260824-22" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="知识库导航">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">B</div>
+          <div class="brand-copy"><strong>BOUJOY</strong><span>知识库</span></div>
+        </div>
+
+        <nav class="nav-list" id="navList">
+          <button class="nav-item is-active" data-view="overview" data-scope="library" aria-current="page" aria-label="总览">
+            <span class="nav-number">01</span><span class="nav-copy"><strong>总览</strong><small>HOME</small></span>
+          </button>
+          <button class="nav-item" data-view="memory" data-scope="library" aria-controls="memoryView" aria-label="Bok 工作台">
+            <span class="nav-number">02</span><span class="nav-copy"><strong>Bok 工作台</strong><small>MEMORY</small></span>
+          </button>
+          <button class="nav-item" data-view="atlas" data-scope="library" aria-label="知识全景">
+            <span class="nav-number">03</span><span class="nav-copy"><strong>知识全景</strong><small>GRAPH</small></span>
+          </button>
+          <button class="nav-item" data-view="pipeline" data-scope="library" aria-label="生产管线">
+            <span class="nav-number">04</span><span class="nav-copy"><strong>生产管线</strong><small>PIPELINE</small></span>
+          </button>
+          <button class="nav-item" data-view="health" data-scope="library" aria-label="健康中心">
+            <span class="nav-number">05</span><span class="nav-copy"><strong>健康中心</strong><small>HEALTH</small></span>
+          </button>
+          <button class="nav-item" data-view="person" data-scope="library" aria-controls="personView" aria-label="关于我">
+            <span class="nav-number">06</span><span class="nav-copy"><strong>关于我</strong><small>PERSONAL</small></span>
+          </button>
+          <details class="nav-group" id="libraryNavGroup">
+            <summary class="nav-group-toggle" aria-label="展开全部分类"><span class="nav-number">07</span><span class="nav-copy"><strong>全部分类</strong><small>LIBRARY</small></span><span class="nav-chevron" aria-hidden="true">⌄</span></summary>
+            <div class="nav-group-items">
+              <button class="nav-item" data-view="library" data-scope="projects" aria-label="项目"><span>项目</span></button>
+              <button class="nav-item" data-view="library" data-scope="knowledge" aria-label="知识库"><span>知识库</span></button>
+              <button class="nav-item" data-view="library" data-scope="content" aria-label="内容"><span>内容</span></button>
+              <button class="nav-item" data-view="library" data-scope="prompts" aria-label="提示词"><span>提示词</span></button>
+              <button class="nav-item" data-view="library" data-scope="business" aria-label="商业"><span>商业</span></button>
+              <button class="nav-item" data-view="library" data-scope="skills" aria-label="Skills"><span>Skills</span></button>
+              <button class="nav-item" data-view="library" data-scope="all" aria-label="全部文件"><span>全部文件</span></button>
+            </div>
+          </details>
+        </nav>
+
+        <details class="vault-status" aria-live="polite">
+          <summary class="status-title"><span>本地知识库</span><span class="status-dot" id="statusDot"></span></summary>
+          <strong id="fileCount">正在连接</strong>
+          <div class="vault-status-details">
+            <div class="status-meter"><span id="statusMeter"></span></div>
+            <p id="vaultPath">读取本地 Markdown</p>
+            <button class="ghost-button" id="connectVault">选择知识库文件夹</button>
+          </div>
+          <input id="folderFallback" type="file" webkitdirectory multiple accept=".md,text/markdown" hidden />
+        </details>
+
+        <div class="sidebar-footer"><span>纯 Markdown</span><span>安全可撤销</span></div>
+      </aside>
+
+      <main class="main-panel">
+        <header class="main-header">
+          <div>
+            <p class="eyebrow" id="mainEyebrow"></p>
+            <h1 id="mainTitle">你的第二大脑</h1>
+            <p class="main-subtitle" id="mainSubtitle">项目、知识与方法，在一个本地空间持续生长。</p>
+          </div>
+          <div class="sync-chip" id="syncChip"><span class="sync-indicator"></span><span id="syncLabel">正在连接</span></div>
+        </header>
+
+        <section class="search-section" id="searchSection" aria-label="搜索和筛选">
+          <label class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="searchInput" type="search" autocomplete="off" aria-label="搜索知识库" placeholder="搜索项目、知识卡、标签或正文…" />
+            <kbd id="searchShortcut">⌘ K</kbd>
+          </label>
+          <div class="filter-row" id="filterRow" aria-label="内容范围">
+            <button class="filter-pill is-active" data-scope="library" aria-pressed="true">精选</button>
+            <button class="filter-pill" data-scope="projects" aria-pressed="false">项目</button>
+            <button class="filter-pill" data-scope="knowledge" aria-pressed="false">知识卡</button>
+            <details class="filter-more" id="filterMore">
+              <summary class="filter-more-toggle">更多 <span aria-hidden="true">⌄</span></summary>
+              <div class="filter-more-menu">
+                <button class="filter-pill" data-scope="content" aria-pressed="false">内容</button>
+                <button class="filter-pill" data-scope="prompts" aria-pressed="false">提示词</button>
+                <button class="filter-pill" data-scope="business" aria-pressed="false">商业</button>
+                <button class="filter-pill" data-scope="skills" aria-pressed="false">Skill</button>
+                <button class="filter-pill" data-scope="all" aria-pressed="false">全部文件</button>
+              </div>
+            </details>
+          </div>
+          <div class="active-query" id="activeQuery" hidden>
+            <span id="activeQueryText"></span><button id="clearFilters" type="button">清除条件</button>
+          </div>
+        </section>
+
+        <div class="dashboard-view" id="overviewView">
+          <section class="focus-section">
+            <div class="section-heading">
+              <div><h2>当前项目</h2></div>
+              <button class="text-button" id="manualRefresh">同步 ↻</button>
+            </div>
+            <article class="focus-card" id="focusCard">
+              <div class="focus-placeholder"><div><h3>正在读取知识库</h3><p>连接后展示当前项目与下一步。</p></div></div>
+            </article>
+          </section>
+          <div id="pipelinePreview" hidden></div>
+          <section class="cards-section">
+            <div class="section-heading">
+              <div><h2>最近</h2></div>
+              <div class="section-actions"><span class="result-count" id="overviewResultCount">读取中</span><button class="text-button" id="viewAllCards" type="button">查看全部</button></div>
+            </div>
+            <div class="card-grid" id="overviewCardGrid"></div>
+          </section>
+          <section class="video-showcase-section">
+            <div class="section-heading">
+              <div><h2>视频</h2></div>
+              <span class="result-count" id="videoResultCount">读取中</span>
+            </div>
+            <div class="video-showcase" id="videoShowcase"></div>
+            <div class="empty-state video-empty" id="videoEmpty" hidden><strong>还没有登记视频</strong><p>把视频路径加入 00-System/Asset-Index.md 后，这里会自动出现。</p></div>
+          </section>
+        </div>
+
+        <section class="tool-view memory-view" id="memoryView" hidden aria-label="Bok 记忆工作台">
+          <div class="atlas-toolbar memory-toolbar">
+            <div><span class="section-kicker">BOK MEMORY</span><h2>记忆工作台</h2><p>随手记、检索、受保护候选和撤销都在这里；后台理解默认不打断当前工作。</p></div>
+            <div class="health-toolbar-actions"><button class="text-button" id="memoryQuickNote" type="button">＋ 随手记</button><button class="text-button" id="memoryRefresh" type="button">刷新 ↻</button></div>
+          </div>
+          <div class="person-loading" id="memoryLoading" role="status" aria-live="polite"><span class="sync-indicator"></span><strong>正在读取 Bok 状态</strong></div>
+          <div class="person-unavailable" id="memoryUnavailable" hidden><span class="person-lock">◇</span><h3>Bok 暂时不可用</h3><p>请通过本地 App 或预览服务打开；知识库浏览仍可继续使用。</p></div>
+          <div class="memory-workspace" id="memoryWorkspace" hidden>
+            <section class="memory-hero" id="memoryHero"></section>
+            <div class="person-tabs memory-tabs" id="memoryTabs" role="tablist" aria-label="Bok 工作台视图">
+              <button class="is-active" id="memoryTodayTab" data-memory-tab="today" role="tab" aria-selected="true" aria-controls="memoryTodayPanel">今天</button>
+              <button id="memorySearchTab" data-memory-tab="search" role="tab" aria-selected="false" aria-controls="memorySearchPanel" tabindex="-1">语义搜索</button>
+              <button id="memoryInboxTab" data-memory-tab="inbox" role="tab" aria-selected="false" aria-controls="memoryInboxPanel" tabindex="-1">记忆收件箱 <span id="memoryInboxBadge">0</span></button>
+              <button id="memoryNotesTab" data-memory-tab="notes" role="tab" aria-selected="false" aria-controls="memoryNotesPanel" tabindex="-1">随手记 <span id="memoryNotesBadge">0</span></button>
+              <button id="memoryActivityTab" data-memory-tab="activity" role="tab" aria-selected="false" aria-controls="memoryActivityPanel" tabindex="-1">活动与撤销</button>
+              <button id="memorySettingsTab" data-memory-tab="settings" role="tab" aria-selected="false" aria-controls="memorySettingsPanel" tabindex="-1">设置</button>
+            </div>
+            <section class="memory-panel" id="memoryTodayPanel" data-memory-panel="today" role="tabpanel" aria-labelledby="memoryTodayTab">
+              <div class="memory-today-grid"><article class="memory-project-card" id="memoryProjectCard"></article><article class="memory-attention-card" id="memoryAttentionCard"></article></div>
+              <section><div class="section-heading"><div><span class="section-kicker">RECENT ACTIVITY</span><h2>最近发生了什么</h2></div></div><div class="memory-activity-list" id="memoryTodayActivity"></div></section>
+            </section>
+            <section class="memory-panel" id="memorySearchPanel" data-memory-panel="search" role="tabpanel" aria-labelledby="memorySearchTab" hidden>
+              <form class="memory-search-form" id="memorySearchForm"><label><span aria-hidden="true">⌕</span><input id="memorySearchInput" type="search" autocomplete="off" aria-label="搜索 Bok 记忆" placeholder="用一句话搜索知识、项目和方法…" /></label><div class="memory-search-scope" id="memorySearchScope"><button class="is-active" type="button" data-memory-scope="default">快速范围</button><button type="button" data-memory-scope="all">搜索全部</button></div><button class="primary-button" id="memorySearchSubmit" type="submit">搜索</button></form>
+              <div class="memory-search-meta" id="memorySearchMeta">默认优先搜索日常知识；需要时再切换“搜索全部”。</div>
+              <div class="memory-search-results" id="memorySearchResults"><div class="person-empty"><strong>输入你真正想找的内容</strong><p>结果会显示命中原因、来源段落和更新时间。</p></div></div>
+            </section>
+            <section class="memory-panel" id="memoryInboxPanel" data-memory-panel="inbox" role="tabpanel" aria-labelledby="memoryInboxTab" hidden><div class="memory-inbox-list" id="memoryInboxList"></div></section>
+            <section class="memory-panel" id="memoryNotesPanel" data-memory-panel="notes" role="tabpanel" aria-labelledby="memoryNotesTab" hidden><div class="memory-panel-heading"><div><span class="section-kicker">QUICK NOTES</span><h2>随手记</h2><p>先记下来，不要求标题、分类或标签。</p></div><button class="primary-button" id="memoryNewNote" type="button">记一条</button></div><div class="memory-note-list" id="memoryNoteList"></div></section>
+            <section class="memory-panel" id="memoryActivityPanel" data-memory-panel="activity" role="tabpanel" aria-labelledby="memoryActivityTab" hidden><div class="memory-activity-list" id="memoryActivityList"></div></section>
+            <section class="memory-panel" id="memorySettingsPanel" data-memory-panel="settings" role="tabpanel" aria-labelledby="memorySettingsTab" hidden><div class="memory-settings-grid" id="memorySettingsGrid"></div><section class="memory-backup-section"><div class="memory-panel-heading"><div><span class="section-kicker">VAULT BACKUPS</span><h2>知识库本地备份</h2><p>只备份 Markdown；恢复前会再生成一份安全备份。</p></div><button class="primary-button" id="memoryCreateBackup" type="button">立即备份</button></div><div class="memory-backup-list" id="memoryBackupList"></div></section><section class="memory-backup-section" id="memoryPersonalBackupSection" hidden><div class="memory-panel-heading"><div><span class="section-kicker">PERSONAL CORE BACKUPS</span><h2>私人记忆独立备份</h2><p>与项目知识库物理分开，只包含 Personal Core 的 Markdown 事实源。</p></div><button class="primary-button" id="memoryCreatePersonalBackup" type="button">备份私人记忆</button></div><div class="memory-backup-list" id="memoryPersonalBackupList"></div></section></section>
+          </div>
+        </section>
+
+        <section class="dashboard-view" id="libraryView" hidden>
+          <section class="cards-section library-cards-section">
+            <div class="section-heading">
+              <div><span class="section-kicker">KNOWLEDGE LIBRARY</span><h2 id="cardsTitle">知识库</h2></div>
+              <span class="result-count" id="resultCount">读取中</span>
+            </div>
+            <div class="card-grid" id="cardGrid"></div>
+            <div class="load-more-row" id="loadMoreRow" hidden><button class="load-more-button" id="loadMore" type="button">加载更多</button></div>
+            <div class="empty-state" id="emptyState" hidden><strong>没有找到匹配内容</strong><p>换一个关键词或清除筛选条件。</p><button class="ghost-button inline-ghost" data-clear-filters>清除条件</button></div>
+          </section>
+        </section>
+
+        <section class="tool-view" id="pipelineView" hidden aria-label="内容生产管线">
+          <div class="atlas-toolbar">
+            <div><span class="section-kicker">CONTENT PIPELINE</span><h2>从知识走到成片</h2><p>读取 Dashboard 中的真实进度，快速找到缺失环节。</p></div>
+            <div class="summary-chip" id="pipelineSummary">读取中</div>
+          </div>
+          <div class="pipeline-board" id="pipelineBoard"></div>
+        </section>
+
+        <section class="atlas-view" id="atlasView" hidden aria-label="知识库全景">
+          <div class="atlas-toolbar">
+            <div><h2>知识图谱</h2></div>
+            <div class="atlas-stats" id="atlasStats"><span><strong>0</strong> 节点</span><span><strong>0</strong> 关联</span></div>
+          </div>
+          <div class="atlas-layout">
+            <div class="atlas-stage" id="atlasStage">
+              <canvas id="knowledgeGraph" aria-label="动态知识关系图"></canvas>
+              <div class="atlas-orbit atlas-orbit-one" aria-hidden="true"></div><div class="atlas-orbit atlas-orbit-two" aria-hidden="true"></div>
+              <div class="atlas-legend" id="atlasLegend"></div><div class="atlas-tooltip" id="atlasTooltip" hidden></div>
+              <div class="atlas-controls" aria-label="图谱视图控制"><button id="atlasZoomOut" type="button" aria-label="缩小图谱">−</button><button id="atlasReset" type="button">适应</button><button id="atlasZoomIn" type="button" aria-label="放大图谱">＋</button></div>
+              <div class="atlas-empty" id="atlasEmpty"><strong>连接知识库后生成全景</strong><p>项目、知识、内容和 Skill 会成为可探索节点。</p></div>
+            </div>
+            <aside class="atlas-accessible"><h3>节点列表</h3><ul id="atlasNodeList"></ul></aside>
+          </div>
+        </section>
+
+        <section class="tool-view" id="healthView" hidden aria-label="知识库健康中心">
+          <div class="atlas-toolbar">
+            <div><span class="section-kicker">VAULT HEALTH</span><h2>知识库健康中心</h2><p>默认只读；清理候选需经过确认后移入系统废纸篓。</p></div>
+            <div class="health-toolbar-actions"><button class="text-button cleanup-button" id="cleanupNow" type="button" hidden>安全清理候选</button><button class="text-button" id="healthRefresh">刷新数据 ↻</button></div>
+          </div>
+          <div class="health-score" id="healthScore"></div>
+          <div class="health-grid" id="healthGrid"></div>
+          <section class="health-details"><div class="section-heading"><div><span class="section-kicker">NEXT ACTIONS</span><h2>下一步建议</h2></div></div><div id="healthActions"></div></section>
+        </section>
+
+        <section class="tool-view person-view" id="personView" hidden aria-label="个人记忆中心">
+          <div class="atlas-toolbar person-toolbar">
+            <div><span class="section-kicker">PERSONAL CORE</span><h2>个人记忆中心</h2><p>它从长期对话、选择和项目经历形成理解；每条认识都有来源与撤销路径。</p></div>
+            <div class="health-toolbar-actions"><button class="text-button" id="personProcess" type="button">整理新观察</button><button class="text-button" id="personRefresh" type="button">刷新 ↻</button></div>
+          </div>
+          <div class="person-loading" id="personLoading" role="status" aria-live="polite"><span class="sync-indicator"></span><strong>正在读取私人记忆</strong></div>
+          <div class="person-unavailable" id="personUnavailable" hidden><span class="person-lock">◇</span><h3>私人记忆尚未启用</h3><p>Personal Core 必须位于知识库和 Git 仓库之外，路径不会显示在浏览器里。请使用本机 CLI 完成一次确认设置。</p><code>bok person setup "/absolute/path/Bok-Personal-Core" --confirm</code></div>
+          <div id="personWorkspace" hidden>
+            <section class="person-hero" id="personHero"></section>
+            <div class="person-tabs" id="personTabs" role="tablist" aria-label="个人记忆视图">
+              <button class="is-active" id="personProfileTab" data-person-tab="profile" role="tab" aria-selected="true" aria-controls="personProfilePanel">我的画像</button>
+              <button id="personGraphTab" data-person-tab="graph" role="tab" aria-selected="false" aria-controls="personGraphPanel" tabindex="-1">理解图谱</button>
+              <button id="personReviewTab" data-person-tab="review" role="tab" aria-selected="false" aria-controls="personReviewPanel" tabindex="-1">需要我介入 <span id="personPendingBadge">0</span></button>
+              <button id="personEvidenceTab" data-person-tab="evidence" role="tab" aria-selected="false" aria-controls="personEvidencePanel" tabindex="-1">证据与结果</button>
+              <button id="personCleanupTab" data-person-tab="cleanup" role="tab" aria-selected="false" aria-controls="personCleanupPanel" tabindex="-1">清理建议 <span id="personCleanupBadge">0</span></button>
+            </div>
+            <section class="person-panel" id="personProfilePanel" data-person-panel="profile" role="tabpanel" aria-labelledby="personProfileTab"><div class="person-profile-summary" id="personProfileSummary"></div><div class="person-permission-summary" id="personPermissionSummary"></div><div class="person-groups" id="personGroups"></div></section>
+            <section class="person-panel" id="personGraphPanel" data-person-panel="graph" role="tabpanel" aria-labelledby="personGraphTab" hidden>
+              <div class="person-graph-copy"><h2>它怎样理解你</h2><div class="person-graph-stats" id="personGraphStats"></div></div>
+              <div class="person-graph-stage" id="personGraphStage">
+                <canvas id="personGraph" aria-label="个人理解图谱"></canvas>
+                <div class="person-graph-legend" id="personGraphLegend"></div>
+                <div class="person-graph-tooltip" id="personGraphTooltip" hidden></div>
+                <div class="person-graph-empty" id="personGraphEmpty"><strong>还没有可绘制的个人理解</strong><p>长期对话形成第一条稳定理解后，这里会自动生成关系。</p></div>
+              </div>
+              <ul class="person-graph-list" id="personGraphList" aria-label="个人理解节点列表"></ul>
+            </section>
+            <section class="person-panel" id="personReviewPanel" data-person-panel="review" role="tabpanel" aria-labelledby="personReviewTab" hidden><div class="person-review-list" id="personReviewList"></div></section>
+            <section class="person-panel" id="personEvidencePanel" data-person-panel="evidence" role="tabpanel" aria-labelledby="personEvidenceTab" hidden>
+              <div class="person-evidence-grid"><section><div class="section-heading"><div><span class="section-kicker">OBSERVATIONS</span><h2>最近观察</h2></div></div><div class="person-stream" id="personObservationList"></div></section><section><div class="section-heading"><div><span class="section-kicker">OUTCOMES</span><h2>回答结果</h2></div></div><div class="person-stream" id="personOutcomeList"></div></section></div>
+              <section><div class="section-heading"><div><span class="section-kicker">INFLUENCE LOG</span><h2>哪些记忆影响了回答</h2></div></div><div class="person-stream" id="personImpactList"></div></section>
+              <section><div class="section-heading"><div><span class="section-kicker">MEMORY TIMELINE</span><h2>记忆变化记录</h2></div></div><div class="person-timeline" id="personTimelineList"></div></section>
+            </section>
+            <section class="person-panel" id="personCleanupPanel" data-person-panel="cleanup" role="tabpanel" aria-labelledby="personCleanupTab" hidden><div class="person-cleanup-list" id="personCleanupList"></div></section>
+          </div>
+        </section>
+      </main>
+
+      <aside class="context-panel" id="contextPanel" aria-label="当前上下文">
+        <header class="context-header">
+          <div><span class="section-kicker">WORKING CONTEXT</span><h2 id="contextTitle">当前工作</h2></div>
+          <button class="icon-button context-back-button" id="closeSelection" aria-label="返回当前工作" hidden>返回</button>
+        </header>
+        <section class="context-block"><h3>下一步</h3><div class="action-list" id="actionList"></div></section>
+        <section class="context-block"><div class="block-title-row"><h3>最近</h3><span id="lastSync">尚未同步</span></div><div class="timeline" id="timeline"></div></section>
+        <section class="context-block"><h3>关联标签</h3><div class="tag-cloud" id="tagCloud"></div></section>
+      </aside>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <dialog class="cleanup-dialog" id="cleanupDialog">
+      <form method="dialog" class="cleanup-dialog-card">
+        <span class="section-kicker">SAFE CLEANUP</span>
+        <h2>移到系统废纸篓？</h2>
+        <p id="cleanupSummary">只处理清理报告中已登记的候选，不会删除知识卡或 Asset-Index 成品。</p>
+        <ul id="cleanupList"></ul>
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button" id="confirmCleanup" value="default" type="submit">移到废纸篓</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="reader-dialog" id="readerDialog">
+      <div class="reader-toolbar">
+        <div class="reader-heading"><span class="section-kicker" id="readerType">KNOWLEDGE CARD</span><h2 id="readerTitle">知识卡</h2><p id="readerPath"></p></div>
+        <div class="reader-actions">
+          <button class="reader-action" id="copyCodex" type="button">交给 Codex</button>
+          <button class="reader-action" id="editCard" type="button" hidden>编辑 Markdown</button>
+          <button class="reader-action" id="copyPath" type="button">复制路径</button>
+          <button class="reader-action" id="revealFile" type="button">Finder 中显示</button>
+          <button class="reader-action danger-action" id="deleteCard" type="button" hidden>移到废纸篓</button>
+          <button class="icon-button" id="closeReader" aria-label="关闭预览">×</button>
+        </div>
+      </div>
+      <article class="markdown-reader" id="markdownReader"></article>
+    </dialog>
+
+    <dialog class="cleanup-dialog" id="deleteCardDialog">
+      <form method="dialog" class="cleanup-dialog-card">
+        <span class="section-kicker">DELETE KNOWLEDGE CARD</span>
+        <h2>移除这张知识卡？</h2>
+        <p id="deleteCardSummary">Markdown 内容卡片会被移到系统废纸篓。系统入口、索引、UI 和 Skill 源文件始终受保护。</p>
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button danger-button" id="confirmDeleteCard" value="default" type="submit">移到废纸篓</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="cleanup-dialog person-edit-dialog" id="personEditDialog" aria-labelledby="personEditTitle">
+      <form method="dialog" class="cleanup-dialog-card" id="personEditForm">
+        <span class="section-kicker" id="personEditKicker">PERSONAL MEMORY</span>
+        <h2 id="personEditTitle">修改记忆</h2>
+        <p id="personEditHint">修改会保留旧版本和来源。</p>
+        <textarea id="personEditValue" rows="5" maxlength="1000" aria-label="个人记忆内容"></textarea>
+        <input id="personEditClaimId" type="hidden" />
+        <input id="personEditMode" type="hidden" />
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button" id="personEditConfirm" value="default" type="submit">保存</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="cleanup-dialog" id="personConfirmDialog" aria-labelledby="personConfirmTitle">
+      <form method="dialog" class="cleanup-dialog-card" id="personConfirmForm">
+        <span class="section-kicker">PERSONAL MEMORY</span>
+        <h2 id="personConfirmTitle">确认操作</h2>
+        <p id="personConfirmHint">历史和版本会继续保留。</p>
+        <input id="personConfirmClaimId" type="hidden" />
+        <input id="personConfirmAction" type="hidden" />
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button danger-button" id="personConfirmButton" value="default" type="submit">确认</button></div>
+      </form>
+    </dialog>
+
+    <button class="quick-note-launcher" id="quickNoteLauncher" type="button" aria-label="打开随手记" title="随手记 · Command/Ctrl + Shift + N"><span>＋</span><strong>随手记</strong></button>
+
+    <dialog class="cleanup-dialog quick-note-dialog" id="quickNoteDialog" aria-labelledby="quickNoteTitle">
+      <form method="dialog" class="cleanup-dialog-card" id="quickNoteForm">
+        <h2 id="quickNoteTitle">随手记</h2>
+        <textarea id="quickNoteValue" rows="10" maxlength="20000" aria-label="随手记内容" placeholder="写下想法、待办、链接或刚得出的结论…"></textarea>
+        <div class="quick-note-meta"><span id="quickNoteDraftState">草稿已在本机保留</span><span id="quickNoteCount">0 / 20000</span></div>
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">稍后再写</button><button class="primary-button" id="quickNoteSave" value="default" type="submit">记下来 <kbd>⌘↵</kbd></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="reader-dialog document-edit-dialog" id="documentEditDialog" aria-labelledby="documentEditTitle">
+      <form method="dialog" id="documentEditForm">
+        <div class="reader-toolbar"><div class="reader-heading"><span class="section-kicker">VERSIONED MARKDOWN</span><h2 id="documentEditTitle">编辑 Markdown</h2><p id="documentEditPath"></p></div><button class="icon-button" value="cancel" aria-label="关闭编辑器">×</button></div>
+        <textarea id="documentEditValue" spellcheck="false"></textarea>
+        <div class="document-edit-footer"><label><input id="documentImportantConfirm" type="checkbox" /> 我确认这是重要内容时也要保存本次修改</label><div><button class="reader-action" value="cancel">取消</button><button class="primary-button" id="documentEditSave" value="default" type="submit">保存新版本</button></div></div>
+      </form>
+    </dialog>
+
+    <dialog class="cleanup-dialog" id="memoryActionDialog" aria-labelledby="memoryActionTitle">
+      <form method="dialog" class="cleanup-dialog-card" id="memoryActionForm">
+        <span class="section-kicker">BOK MEMORY</span><h2 id="memoryActionTitle">确认操作</h2><p id="memoryActionHint"></p>
+        <textarea id="memoryActionReason" rows="4" maxlength="500" placeholder="可填写原因"></textarea>
+        <input id="memoryActionMode" type="hidden" /><input id="memoryActionReference" type="hidden" />
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button" id="memoryActionConfirm" value="default" type="submit">确认</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="cleanup-dialog" id="backupRestoreDialog" aria-labelledby="backupRestoreTitle">
+      <form method="dialog" class="cleanup-dialog-card" id="backupRestoreForm">
+        <span class="section-kicker">RESTORE BACKUP</span><h2 id="backupRestoreTitle">恢复这份备份？</h2><p id="backupRestoreHint">这会覆盖备份中对应的 Markdown。恢复前会自动生成一份当前安全备份。</p>
+        <label class="restore-confirm-label">输入当前数据源名称 <strong id="backupVaultName"></strong><input id="backupVaultConfirm" autocomplete="off" /></label><input id="backupRestoreId" type="hidden" /><input id="backupRestoreKind" type="hidden" />
+        <div class="cleanup-dialog-actions"><button class="reader-action" value="cancel">取消</button><button class="primary-button danger-button" id="backupRestoreConfirm" value="default" type="submit">确认恢复</button></div>
+      </form>
+    </dialog>
+
+    <script src="./app.js?v=20260824-11" defer></script>
+  </body>
+</html>

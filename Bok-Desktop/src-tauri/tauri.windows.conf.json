@@ -1,0 +1,23 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": [],
+    "resources": {
+      "../build-resources/ui/": "resources/ui/",
+      "../build-resources/starter-vault/": "resources/starter-vault/",
+      "../build-resources/windows-source/": "resources/windows-source/",
+      "../build-resources/windows-python/": "resources/windows-python/"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

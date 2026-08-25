@@ -1,0 +1,9 @@
+/build-resources/
+/src-tauri/binaries/
+/target/
+/.build-stage/
+__pycache__/
+*.pyc
+*.dmg
+*.exe
+*.msi

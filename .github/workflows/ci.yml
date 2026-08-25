@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python core
+        working-directory: Bok
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: UI product contracts
+        run: python AI-Second-Brain-UI/tests/test_product_contracts.py
+      - name: Prepare desktop share resources
+        run: python Bok-Desktop/scripts/prepare_share.py --workspace . --deny ci-placeholder-user
+      - name: Desktop contracts
+        run: python Bok-Desktop/scripts/test_desktop_contracts.py
+      - name: Privacy audit
+        run: >-
+          python Bok-Desktop/scripts/privacy_audit.py
+          README.md LICENSE NOTICE
+          AI-Second-Brain-UI
+          Bok
+          Bok-Desktop/frontend
+          Bok-Desktop/scripts
+          Bok-Desktop/src-tauri
+          Bok-Desktop/starter-vault
+          --deny ci-placeholder-user
+
+  browser-smoke:
+    name: Real browser smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start local preview
+        shell: bash
+        run: |
+          python AI-Second-Brain-UI/web_preview.pyw \
+            --server-only 8765 \
+            --idle-timeout 0 \
+            --vault-root Bok-Desktop/starter-vault \
+            --bok-package-root Bok > /tmp/bok-preview.log 2>&1 &
+          echo $! > /tmp/bok-preview.pid
+          for attempt in {1..100}; do
+            if curl --fail --silent http://127.0.0.1:8765/api/heartbeat >/dev/null; then
+              exit 0
+            fi
+            sleep 0.1
+          done
+          cat /tmp/bok-preview.log
+          exit 1
+      - name: Exercise product flows
+        env:
+          BOUJOY_PREVIEW_URL: http://127.0.0.1:8765/
+        run: node AI-Second-Brain-UI/tests/browser-smoke.mjs
+      - name: Stop local preview
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/bok-preview.pid ]]; then
+            kill "$(cat /tmp/bok-preview.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/bok-preview.log || true
