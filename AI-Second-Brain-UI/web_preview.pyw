@@ -666,11 +666,11 @@ class PreviewHandler(SimpleHTTPRequestHandler):
             raise ValueError("Exactly one non-empty path is required.")
         raw_path = values[0]
         lexical_candidate = Path(os.path.abspath(VAULT_ROOT / raw_path))
+        try:
+            lexical_relative = lexical_candidate.relative_to(VAULT_ROOT)
+        except ValueError as error:
+            raise PermissionError("Path is outside the Vault.") from error
         if reject_symlinks:
-            try:
-                lexical_relative = lexical_candidate.relative_to(VAULT_ROOT)
-            except ValueError as error:
-                raise PermissionError("Path is outside the Vault.") from error
             current = VAULT_ROOT
             for part in lexical_relative.parts:
                 current /= part

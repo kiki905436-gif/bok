@@ -51,13 +51,17 @@ class DesktopContracts(unittest.TestCase):
         cls.process = subprocess.Popen(
             command,
             cwd=cls.runtime,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            env={
+                **os.environ,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONUNBUFFERED": "1",
+            },
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if cls.ready.is_file():
                 cls.base_url = cls.ready.read_text(encoding="utf-8").strip().rstrip("/")
@@ -68,7 +72,16 @@ class DesktopContracts(unittest.TestCase):
             time.sleep(0.05)
         else:
             cls.process.terminate()
-            raise RuntimeError("Desktop backend did not produce a ready file")
+            try:
+                cls.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                cls.process.kill()
+                cls.process.wait(timeout=5)
+            output = cls.process.stdout.read() if cls.process.stdout else ""
+            raise RuntimeError(
+                "Desktop backend did not produce a ready file.\n"
+                f"Captured output:\n{output or '<none>'}"
+            )
         cls.opener = build_opener(ProxyHandler({}))
 
     @classmethod

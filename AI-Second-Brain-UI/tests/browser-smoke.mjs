@@ -763,5 +763,16 @@ console.log(JSON.stringify({ status: "PASS", overview, moreMenu, moreSelection, 
       delay(1000),
     ]);
   }
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  let cleanupError;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      cleanupError = undefined;
+      break;
+    } catch (error) {
+      cleanupError = error;
+      await delay(200 * (attempt + 1));
+    }
+  }
+  if (cleanupError) console.warn(`Browser profile cleanup deferred: ${cleanupError.code || cleanupError.message}`);
 }
