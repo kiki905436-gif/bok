@@ -348,6 +348,10 @@ class BokCoreContracts(unittest.TestCase):
         self.assertIn("Markdown", result["decisions"])
         self.assertIn("Memory API", result["next_actions"])
 
+    def test_focus_path_reuses_the_validated_index(self) -> None:
+        with patch.object(self.service.storage, "read_text", side_effect=OSError("path temporarily unavailable")):
+            self.assertEqual(self.service.search_engine.focus_path(), "02-Projects/bok.md")
+
     def test_ordinary_high_confidence_memory_auto_commits(self) -> None:
         self.service.memory.intelligence.analyze = lambda *args, **kwargs: ordinary_analysis()
         result = self.service.propose_memory("使用段落级检索可以减少 Token。", source={"type": "test", "ref": "turn-1"})

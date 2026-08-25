@@ -29,6 +29,10 @@ GENERIC_PATTERNS = {
     "windows_user_path": WINDOWS_USER_PATH,
 }
 SKIPPED_NAMES = {".DS_Store", "Thumbs.db"}
+SKIPPED_DIRS = {
+    ".bok", ".git", ".mypy_cache", ".pytest_cache", ".venv",
+    "__pycache__", "_dist", "build-resources", "node_modules", "target",
+}
 
 
 def iter_files(root: Path):
@@ -38,6 +42,9 @@ def iter_files(root: Path):
     for path in sorted(root.rglob("*")):
         if path.is_symlink():
             raise RuntimeError(f"Symbolic link is forbidden in share output: {path}")
+        relative_parts = path.relative_to(root).parts
+        if any(part.casefold() in SKIPPED_DIRS for part in relative_parts):
+            continue
         if path.is_file() and path.name not in SKIPPED_NAMES:
             yield path
 

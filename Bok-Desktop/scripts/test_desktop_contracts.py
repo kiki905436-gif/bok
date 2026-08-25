@@ -245,6 +245,19 @@ class DesktopContracts(unittest.TestCase):
         issues = scan_path(PROJECT / "scripts" / "privacy_audit.py", [])
         self.assertEqual(issues, [])
 
+    def test_privacy_auditor_ignores_generated_directories_only(self) -> None:
+        root = self.runtime / "privacy-fixture"
+        generated = root / "__pycache__"
+        generated.mkdir(parents=True)
+        payload = b"temporary bytecode path: /" + b"Users/" + b"example-name/private.txt"
+        (generated / "module.pyc").write_bytes(payload)
+        self.assertEqual(scan_path(root, []), [])
+
+        tracked = root / "module.py"
+        tracked.write_bytes(payload)
+        issues = scan_path(root, [])
+        self.assertTrue(any("mac_user_path" in issue for issue in issues), issues)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

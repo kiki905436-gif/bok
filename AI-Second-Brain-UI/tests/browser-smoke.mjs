@@ -49,6 +49,7 @@ let socket;
 try {
 browser = spawn(chromePath, [
   "--headless=new",
+  ...(process.platform === "linux" ? ["--no-sandbox", "--disable-dev-shm-usage"] : []),
   "--disable-background-networking",
   "--disable-component-update",
   "--disable-default-apps",
@@ -63,7 +64,7 @@ browser = spawn(chromePath, [
 ], { stdio: "ignore" });
 
 const devtoolsFile = join(profile, "DevToolsActivePort");
-for (let attempt = 0; attempt < 100 && !existsSync(devtoolsFile); attempt += 1) await delay(50);
+for (let attempt = 0; attempt < 200 && !existsSync(devtoolsFile); attempt += 1) await delay(50);
 if (!existsSync(devtoolsFile)) throw new Error("Chrome DevTools did not start.");
 const [port, websocketPath] = readFileSync(devtoolsFile, "utf8").trim().split(/\r?\n/u);
 socket = new WebSocket(`ws://127.0.0.1:${port}${websocketPath}`);

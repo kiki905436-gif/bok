@@ -229,9 +229,9 @@ python3 Bok-Desktop/scripts/privacy_audit.py .
 
 The current release includes:
 
-- 116 Python core contracts;
+- 117 Python core contracts;
 - 31 UI product contracts;
-- 7 desktop resource, privacy, and native-bridge contracts;
+- 8 desktop resource, privacy, and native-bridge contracts;
 - real-browser smoke tests at desktop and mobile sizes;
 - retrieval regressions built from realistic questions.
 
@@ -469,9 +469,9 @@ python3 Bok-Desktop/scripts/privacy_audit.py .
 
 当前版本包含：
 
-- 116 项 Python 核心合同；
+- 117 项 Python 核心合同；
 - 31 项 UI 产品合同；
-- 7 项桌面资源、隐私与原生桥接合同；
+- 8 项桌面资源、隐私与原生桥接合同；
 - 桌面和移动尺寸的真实浏览器冒烟验收；
 - 使用真实问法构建的检索回归集。
 

@@ -142,12 +142,24 @@ class VaultSearch:
                 state.fingerprint = ""
 
     def focus_path(self) -> str:
+        # Prefer the already validated Markdown index without forcing another
+        # Vault scan. This also avoids a Windows temporary-path edge case when
+        # the same file was successfully indexed moments earlier.
+        with self.lock:
+            document = self.indexes["default"].documents.get("00-System/Active-Context.md")
+        if document:
+            configured = str(document.frontmatter.get("focus_path") or "").strip()
+            if configured:
+                return configured.replace("\\", "/")
+            match = re.search(r"(?m)^focus_path:\s*([^\r\n]+)$", document.text)
+            if match:
+                return match.group(1).strip().replace("\\", "/")
         try:
             text = self.storage.read_text("00-System/Active-Context.md")
         except (BokError, OSError):
             return ""
         match = re.search(r"(?m)^focus_path:\s*([^\r\n]+)$", text)
-        return match.group(1).strip() if match else ""
+        return match.group(1).strip().replace("\\", "/") if match else ""
 
     @staticmethod
     def _resume_intent(query: str) -> bool:
