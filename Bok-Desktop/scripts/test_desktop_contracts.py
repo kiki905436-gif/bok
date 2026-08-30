@@ -241,6 +241,7 @@ class DesktopContracts(unittest.TestCase):
         manifest = json.loads((RESOURCES / "share-manifest.json").read_text(encoding="utf-8"))
         paths = {item["path"] for item in manifest["files"]}
         self.assertIn("ui/index.html", paths)
+        self.assertIn("ui/calm.css", paths)
         self.assertIn("starter-vault/AGENTS.md", paths)
         self.assertIn("windows-source/bok_core/api.py", paths)
         self.assertFalse(any(path.startswith("starter-vault/.bok/") for path in paths))
