@@ -40,6 +40,63 @@ TOOLS = [
         "annotations": {"title": "Resume Bok project", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
     {
+        "name": "bok_project_contexts",
+        "description": "List Codex experience grouped by primary project context. Projects are the stable extraction boundary; raw conversations remain source evidence.",
+        "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}}},
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "List Bok project contexts", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
+    {
+        "name": "bok_project_scenario_sources",
+        "description": "Find source conversations for one business scenario inside a primary project context. Returns references and titles, not raw conversation bodies.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"project": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}},
+            "required": ["project", "query"],
+        },
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "Find scenario source conversations", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
+    {
+        "name": "bok_discover_project_scenarios",
+        "description": "Use the configured low-cost Codex CLI model to identify repeatable business scenarios inside one project context. Does not write an operational loop.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"project": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 200}},
+            "required": ["project"],
+        },
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "Discover project business scenarios", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+    },
+    {
+        "name": "bok_extract_operational_loop",
+        "description": "For one project and business scenario, retrieve related Codex sessions, extract each session independently, synthesize a sourced trigger-to-verification operational loop, and save it as Markdown.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string"},
+                "scenario": {"type": "string"},
+                "query": {"type": "string"},
+                "max_sessions": {"type": "integer", "minimum": 1, "maximum": 20},
+                "source_refs": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
+            },
+            "required": ["project", "scenario"],
+        },
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "Extract a sourced operational loop", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+    },
+    {
+        "name": "bok_operational_loop",
+        "description": "Read one compiled operational loop for an Agent, including ordered actions, decisions, verification gates, gaps, and source conversation references.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"project": {"type": "string"}, "scenario": {"type": "string"}},
+            "required": ["project", "scenario"],
+        },
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "Read an operational loop", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
+    {
         "name": "bok_person_context",
         "description": "Build a minimal context block from effective Personal Core understanding: low-risk evidence-backed learned claims plus user-confirmed protected claims visible to the declared local agent and project.",
         "inputSchema": {
@@ -197,6 +254,23 @@ class MCPServer:
             "bok_search": lambda value: service.search(value.get("query", ""), limit=value.get("limit"), token_budget=value.get("token_budget"), scope=value.get("scope", "default")),
             "bok_context": lambda value: service.context(value.get("task", ""), limit=value.get("limit"), token_budget=value.get("token_budget"), scope=value.get("scope", "default")),
             "bok_project_resume": lambda value: service.project_resume(value.get("path", ""), token_budget=value.get("token_budget")),
+            "bok_project_contexts": lambda value: service.project_contexts(limit=value.get("limit", 200)),
+            "bok_project_scenario_sources": lambda value: service.project_scenario_sources(
+                value.get("project", ""), query=value.get("query", ""), limit=value.get("limit", 20)
+            ),
+            "bok_discover_project_scenarios": lambda value: service.discover_project_scenarios(
+                value.get("project", ""), limit=value.get("limit", 80)
+            ),
+            "bok_extract_operational_loop": lambda value: service.extract_operational_loop(
+                value.get("project", ""),
+                value.get("scenario", ""),
+                query=value.get("query", ""),
+                max_sessions=value.get("max_sessions", 8),
+                source_refs=value.get("source_refs") if isinstance(value.get("source_refs"), list) else None,
+            ),
+            "bok_operational_loop": lambda value: service.operational_loop(
+                value.get("project", ""), value.get("scenario", "")
+            ),
             "bok_person_context": lambda value: service.person_context(
                 task=value.get("task", ""),
                 agent=value.get("agent", ""),

@@ -14,6 +14,7 @@ from .conversation import ConversationLedger
 from .errors import BokError, NotFoundError
 from .markdown import parse_frontmatter, render_frontmatter
 from .memory import MemoryInbox
+from .operational import OperationalExperience
 from .person import PersonalClaimStore
 from .person_learning import PersonalLearningStore
 from .provider import CredentialStore, ProviderClient
@@ -32,6 +33,7 @@ class BokService:
         self.storage = VaultStorage(config)
         self.search_engine = VaultSearch(config, self.storage)
         self.memory = MemoryInbox(config, self.storage, self.search_engine)
+        self.operations = OperationalExperience(config, self.storage)
         self.conversations = ConversationLedger(config, self.memory)
         self.person = PersonalClaimStore(config)
         self.person_learning = PersonalLearningStore(config, self.person)
@@ -130,6 +132,11 @@ class BokService:
                 "agent.issue",
                 "agent.revoke",
                 "project.resume",
+                "operations.projects",
+                "operations.sources",
+                "operations.scenarios.discover",
+                "operations.loop.extract",
+                "operations.loop.read",
                 "quick-note.create",
                 "document.write",
                 "document.rollback",
@@ -332,6 +339,23 @@ class BokService:
     def sources(self, query: str, **options) -> dict:
         context = self.context(query, **options)
         return {"query": query, "sources": context["sources"], "token_estimate": context["token_estimate"]}
+
+    def project_contexts(self, *, limit: int = 200) -> dict:
+        return self.operations.projects(limit=limit)
+
+    def project_scenario_sources(self, project: str, *, query: str = "", limit: int = 20) -> dict:
+        return self.operations.sources(project, query=query, limit=limit)
+
+    def discover_project_scenarios(self, project: str, *, limit: int = 80) -> dict:
+        return self.operations.discover(project, limit=limit)
+
+    def extract_operational_loop(self, project: str, scenario: str, *, query: str = "", max_sessions: int = 8, source_refs=None) -> dict:
+        result = self.operations.extract(project, scenario, query=query, max_sessions=max_sessions, source_refs=source_refs)
+        self.search_engine.invalidate()
+        return result
+
+    def operational_loop(self, project: str, scenario: str) -> dict:
+        return self.operations.get(project, scenario)
 
     def propose_memory(self, material: str, *, source=None, explicit_cloud_consent: bool = False) -> dict:
         return self.memory.propose(material, source=source, explicit_cloud_consent=explicit_cloud_consent)

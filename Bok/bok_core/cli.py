@@ -66,6 +66,27 @@ def parser() -> argparse.ArgumentParser:
     resume.add_argument("--path", default="")
     resume.add_argument("--token-budget", type=int, default=None)
 
+    operations = subparsers.add_parser("operations", help="Build project-scoped executable business loops from Codex sessions")
+    operation_commands = operations.add_subparsers(dest="operation_command", required=True)
+    operation_projects = operation_commands.add_parser("projects")
+    operation_projects.add_argument("--limit", type=int, default=200)
+    operation_sources = operation_commands.add_parser("sources")
+    operation_sources.add_argument("project")
+    operation_sources.add_argument("query")
+    operation_sources.add_argument("--limit", type=int, default=20)
+    operation_discover = operation_commands.add_parser("discover")
+    operation_discover.add_argument("project")
+    operation_discover.add_argument("--limit", type=int, default=80)
+    operation_extract = operation_commands.add_parser("extract")
+    operation_extract.add_argument("project")
+    operation_extract.add_argument("scenario")
+    operation_extract.add_argument("--query", default="")
+    operation_extract.add_argument("--max-sessions", type=int, default=8)
+    operation_extract.add_argument("--source-ref", action="append")
+    operation_get = operation_commands.add_parser("get")
+    operation_get.add_argument("project")
+    operation_get.add_argument("scenario")
+
     person = subparsers.add_parser("person", help="Manage the physically separate Personal Core")
     person_commands = person.add_subparsers(dest="person_command", required=True)
     person_setup = person_commands.add_parser("setup")
@@ -292,6 +313,27 @@ def _run_person(service: BokService, arguments) -> dict:
     raise BokError("unknown_person_command", "Unknown Personal Core command")
 
 
+def _run_operations(service: BokService, arguments) -> dict:
+    command = arguments.operation_command
+    if command == "projects":
+        return service.project_contexts(limit=arguments.limit)
+    if command == "sources":
+        return service.project_scenario_sources(arguments.project, query=arguments.query, limit=arguments.limit)
+    if command == "discover":
+        return service.discover_project_scenarios(arguments.project, limit=arguments.limit)
+    if command == "extract":
+        return service.extract_operational_loop(
+            arguments.project,
+            arguments.scenario,
+            query=arguments.query,
+            max_sessions=arguments.max_sessions,
+            source_refs=arguments.source_ref,
+        )
+    if command == "get":
+        return service.operational_loop(arguments.project, arguments.scenario)
+    raise BokError("unknown_operations_command", "Unknown operational ontology command")
+
+
 def doctor(service: BokService) -> dict:
     health = service.health()
     checks = [
@@ -354,6 +396,8 @@ def run(argv=None) -> int:
             value = service.create_quick_note(arguments.text, source=arguments.source)
         elif command == "resume":
             value = service.project_resume(arguments.path, token_budget=arguments.token_budget)
+        elif command == "operations":
+            value = _run_operations(service, arguments)
         elif command == "person":
             value = _run_person(service, arguments)
         elif command == "agent":

@@ -1,5 +1,54 @@
 # Bok Markdown Schema v1
 
+## 项目上下文与可执行闭环
+
+Bok 的 FDE 经验不再以单次会话摘要作为最终单位。层级固定为：
+
+```text
+Project Context → Business Scenario → Operational Loop → Operational Action / Verification Gate
+```
+
+- `Project Context` 通常对应一个代码项目，是会话召回和场景归属的主要边界。
+- `Business Scenario` 是项目内可重复出现、具有明确业务结果的工作情境。
+- `Operational Loop` 是从触发条件到验证结果的完整执行资产。
+- `Source Conversation` 只提供证据，可同时支持多个场景，不能直接冒充闭环。
+- 跨项目流程通过主项目和关联项目表达，不把真实关系压成单棵目录树。
+
+闭环文件位于：
+
+```text
+06-Business/Projects/<project-id>/Scenarios/<scenario-id>.md
+```
+
+frontmatter 至少包含：
+
+```yaml
+---
+id: loop-<stable-id>
+type: operational-loop
+role: agent-runtime
+status: draft
+project_id: adpilot-12345678
+project_name: Adpilot
+scenario_id: tiktok-api-onboarding
+source: codex-conversations
+source_sessions:
+  - codex-session:<session-id>
+input_fingerprint: <sha256>
+model_evidence: gpt-5.3-codex-spark
+model_synthesis: gpt-5.5
+schema_version: 3
+created: 2026-08-30T00:00:00Z
+updated: 2026-08-30T00:00:00Z
+---
+```
+
+正文必须明确业务结果、触发条件、适用范围、业务对象、前置条件、按顺序执行的动作、决策分支、失败恢复、验证门、交付物、证据缺口、冲突和来源会话。业务结果、触发条件和每一条清单项都要引用稳定的 `codex-session:<id>`；无来源的模型判断不能进入正式闭环。每个步骤还要标记 `stable` 或 `needs_current_policy`。历史会话中的发布、授权、权限和 Agent 协作规则若未证明仍然有效，只能标为 `needs_current_policy`，核对当前项目规则前 Agent 不得执行。
+
+提炼分成两层：低成本模型逐会话提取 Evidence Fragment，综合模型只基于这些带来源的片段编译 Operational Loop。自动提炼只能产生 `draft` 或 `needs_evidence`；只有经过真实执行和证据回读后才能成为 `validated`。
+
+源会话中的 `input_image` 也属于 Evidence Fragment。Bok 最多为一次会话提取 4 张受支持图片，临时附给本机 Codex CLI；正式 Vault 和 Evidence Cache 只保存 `codex-image:<session-id>:<hash>` 引用及视觉结论，不复制原始 base64 图片。无法读取、超限或仅凭图片无法确认的内容必须进入证据缺口。
+
 ## 正式记忆卡
 
 ```yaml

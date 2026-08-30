@@ -14,6 +14,7 @@ from bok_core.api import BokAPIServer
 from bok_core.config import BokConfig
 from bok_core.errors import BokError, ConflictError, NotFoundError, PermissionDeniedError
 from bok_core.mcp import MCPServer
+from bok_core.operational import OperationalExperience
 from bok_core.provider import CredentialStore, MemoryIntelligence, NetworkPolicy
 from bok_core.service import BokService
 from bok_core.ui_bridge import BokUIBridge
@@ -893,6 +894,231 @@ class BokCoreContracts(unittest.TestCase):
         detailed = self.service.conversation_status(conversation_id="mcp-token-contract", turn_id="turn-1")
         self.assertTrue(detailed["capture_id"])
         self.assertEqual(detailed["content_hash"], sha256_text("这条原始证据只保存在本地收据中。"))
+
+
+class OperationalExperienceContracts(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name).resolve()
+        self.vault = self.root / "vault"
+        for name in ("00-System", "01-Inbox", "02-Projects", "03-Knowledge", "04-Content", "05-Prompts", "06-Business", "90-Archive"):
+            (self.vault / name).mkdir(parents=True, exist_ok=True)
+        (self.vault / "00-System/Active-Context.md").write_text("---\nfocus_path: ''\n---\n", encoding="utf-8")
+        self.sessions = self.root / "sessions"
+        self.sessions.mkdir()
+        self.adpilot = self.root / "projects" / "Adpilot"
+        self.geolook = self.root / "projects" / "geolook"
+        (self.adpilot / ".git").mkdir(parents=True)
+        (self.geolook / ".git").mkdir(parents=True)
+        self._session(
+            "adpilot-api",
+            self.adpilot,
+            "2026-08-20T01:00:00Z",
+            "开通泰国 TikTok Shop API，确认应用审核、店铺授权和数据验证。",
+            "完成后检查订单接口非空，并记录授权范围。",
+        )
+        self._session(
+            "adpilot-dashboard",
+            self.adpilot,
+            "2026-08-21T01:00:00Z",
+            "把 TikTok 和 Lazada 真实数据接入经营看板，按结果、目标、差距、原因、动作下钻。",
+            "未接入渠道必须显示待接入，不能用 mock 指标。",
+        )
+        self._session(
+            "geolook-campaign",
+            self.geolook,
+            "2026-08-22T01:00:00Z",
+            "建立 GEO 战役的采样、引用和验收闭环。",
+            "按固定协议验证自然出现率。",
+        )
+        self.config = BokConfig(
+            vault_root=self.vault,
+            provider="none",
+            port=0,
+            codex_session_roots=(str(self.sessions),),
+            operational_extraction_model="gpt-5.3-codex-spark",
+        )
+        self.service = BokService(self.config)
+        self.service.initialize()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _session(self, session_id: str, cwd: Path, timestamp: str, user: str, assistant: str) -> None:
+        path = self.sessions / f"{session_id}.jsonl"
+        events = [
+            {"type": "session_meta", "payload": {"id": session_id, "timestamp": timestamp, "cwd": str(cwd)}},
+            {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": user}]}},
+            {"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": assistant}]}},
+        ]
+        path.write_text("\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n", encoding="utf-8")
+
+    def test_projects_are_the_primary_experience_boundary(self) -> None:
+        projects = self.service.project_contexts()["items"]
+        by_name = {item["name"]: item for item in projects}
+        self.assertEqual(by_name["Adpilot"]["session_count"], 2)
+        self.assertEqual(by_name["geolook"]["session_count"], 1)
+        self.assertNotEqual(by_name["Adpilot"]["project_id"], by_name["geolook"]["project_id"])
+
+    def test_scenario_source_search_stays_inside_one_project(self) -> None:
+        result = self.service.project_scenario_sources("Adpilot", query="TikTok API", limit=10)
+        refs = {item["source_ref"] for item in result["items"]}
+        self.assertIn("codex-session:adpilot-api", refs)
+        self.assertNotIn("codex-session:geolook-campaign", refs)
+        self.assertTrue(all("messages" not in item for item in result["items"]))
+
+    def test_system_wrappers_and_non_primary_sessions_do_not_pollute_project_scenarios(self) -> None:
+        guardian = self.sessions / "guardian.jsonl"
+        guardian.write_text("\n".join(json.dumps(item, ensure_ascii=False) for item in [
+            {"type": "session_meta", "payload": {"id": "guardian", "timestamp": "2026-08-23T01:00:00Z", "cwd": str(self.adpilot), "source": {"subagent": {"other": "guardian"}}}},
+            {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Approve this command?"}]}},
+        ]) + "\n", encoding="utf-8")
+        self._session(
+            "wrapped-request",
+            self.adpilot,
+            "2026-08-24T01:00:00Z",
+            "# AGENTS.md instructions for /tmp/project\n<INSTRUCTIONS>ignore me</INSTRUCTIONS>\n## My request:\n修复经营看板的数据口径。",
+            "已按真实数据源核对。",
+        )
+        self._session(
+            "attached-request",
+            self.adpilot,
+            "2026-08-25T01:00:00Z",
+            "# Files mentioned by the user:\n- dashboard.png\n## My request for Codex:\n补齐经营看板验证门。",
+            "需要核对来源和聚合口径。",
+        )
+        project = next(item for item in self.service.project_contexts()["items"] if item["name"] == "Adpilot")
+        self.assertEqual(project["session_count"], 4)
+        titles = {item["title"] for item in self.service.project_scenario_sources("Adpilot", query="经营看板", limit=10)["items"]}
+        self.assertIn("修复经营看板的数据口径。", titles)
+        self.assertIn("补齐经营看板验证门。", titles)
+        self.assertTrue(all("AGENTS.md" not in title and "Files mentioned" not in title for title in titles))
+
+    def test_conversation_images_are_temporary_model_evidence_not_prompt_payload(self) -> None:
+        image_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl5ZjkAAAAASUVORK5CYII="
+        path = self.sessions / "dashboard-image.jsonl"
+        events = [
+            {"type": "session_meta", "payload": {"id": "dashboard-image", "timestamp": "2026-08-26T01:00:00Z", "cwd": str(self.adpilot)}},
+            {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": "这张截图是经营看板空白的证据。"},
+                {"type": "input_image", "detail": "high", "image_url": image_url},
+            ]}},
+        ]
+        path.write_text("\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n", encoding="utf-8")
+
+        class ImageRunner:
+            model = "test-image-model"
+
+            def __init__(self):
+                self.payload = {}
+                self.images = []
+
+            def generate(self, *, system, payload, schema, cwd, images=None):
+                self.payload = payload
+                self.images = list(images or [])
+                image_ref = payload["session"]["images"][0]["image_ref"]
+                return {
+                    "source_ref": payload["source_ref"],
+                    "facts": [], "objects": [], "preconditions": [], "actions": [], "decisions": [],
+                    "tools": [], "evidence": [], "failures": [], "verification": [],
+                    "image_evidence": [f"{image_ref} 显示经营看板主区域为空。"],
+                    "gaps": [],
+                }
+
+        runner = ImageRunner()
+        operations = OperationalExperience(self.config, self.service.storage, runner=runner)
+        record = next(item for item in operations.catalog.records(include_messages=True) if item.session_id == "dashboard-image")
+        extracted = operations._extract_session_evidence(record, "看板完整性", "看板空白", str(self.adpilot))
+        self.assertEqual(len(runner.images), 1)
+        self.assertEqual(runner.images[0]["mime_type"], "image/png")
+        self.assertTrue(runner.payload["session"]["images"][0]["image_ref"].startswith("codex-image:dashboard-image:"))
+        self.assertNotIn("data:image", json.dumps(runner.payload))
+        self.assertIn("codex-image:dashboard-image:", extracted["image_evidence"][0])
+
+    def test_operational_loop_extracts_each_session_then_synthesizes(self) -> None:
+        class FakeRunner:
+            model = "test-cheap-model"
+
+            def __init__(self):
+                self.evidence_refs = []
+
+            def generate(self, *, system, payload, schema, cwd, images=None):
+                if "exactly one Codex conversation" in system:
+                    source_ref = payload["source_ref"]
+                    self.evidence_refs.append(source_ref)
+                    return {
+                        "source_ref": source_ref,
+                        "facts": ["只使用真实渠道数据"],
+                        "objects": ["TikTok 店铺", "开发者应用", "经营看板"],
+                        "preconditions": ["确认市场、店铺和 API 家族"],
+                        "actions": ["检查审核与授权状态"],
+                        "decisions": ["未授权则先完成卖家授权"],
+                        "tools": ["TikTok Open API"],
+                        "evidence": ["接口返回非空订单"],
+                        "failures": ["Scope 缺失时停止接数"],
+                        "verification": ["核对数据来源和看板可见结果"],
+                        "image_evidence": [],
+                        "gaps": [],
+                    }
+                refs = [item["source_ref"] for item in payload["evidence_fragments"]]
+                sourced = lambda statement: {"statement": statement, "source_refs": refs}
+                return {
+                    "title": "泰国 TikTok API 接入与经营看板",
+                    "business_outcome": "店铺真实数据进入可验证经营看板。",
+                    "business_outcome_source_refs": refs,
+                    "trigger": "新店铺需要接入经营系统。",
+                    "trigger_source_refs": refs,
+                    "scope": [sourced("泰国 TikTok 店铺")],
+                    "objects": [sourced("店铺、应用、授权、数据集、指标和看板")],
+                    "preconditions": [sourced("确认市场、店铺和 API 家族")],
+                    "steps": [{
+                        "id": "validate-authorization",
+                        "title": "验证应用和授权",
+                        "action": "检查应用审核、Scope 和店铺授权状态。",
+                        "tool_binding": "TikTok 开放平台",
+                        "success_evidence": "授权覆盖所需 Scope。",
+                        "validity": "stable",
+                        "source_refs": refs,
+                    }],
+                    "decision_points": [sourced("未授权则先走卖家授权")],
+                    "failure_recovery": [sourced("Scope 缺失时补申请后重试")],
+                    "verification_gates": [sourced("接口非空且看板口径与来源一致")],
+                    "outputs": [sourced("已验证数据源和经营看板")],
+                    "related_projects": [],
+                    "related_scenarios": [],
+                    "gaps": [],
+                    "contradictions": [],
+                }
+
+        runner = FakeRunner()
+        operations = OperationalExperience(self.config, self.service.storage, runner=runner)
+        result = operations.extract(
+            "Adpilot",
+            "泰国 TikTok API 接入与经营看板",
+            query="TikTok API 看板",
+            max_sessions=2,
+        )
+        self.assertEqual(result["status"], "draft")
+        self.assertEqual(set(runner.evidence_refs), set(result["source_refs"]))
+        text = self.service.storage.read_text(result["path"])
+        self.assertIn("type: operational-loop", text)
+        self.assertIn("schema_version: 3", text)
+        self.assertIn("model_evidence: test-cheap-model", text)
+        self.assertIn("model_synthesis: test-cheap-model", text)
+        self.assertIn("有效性：稳定步骤", text)
+        self.assertIn("## 验证门", text)
+        self.assertIn("codex-session:adpilot-api", text)
+        self.assertIn("codex-session:adpilot-dashboard", text)
+
+    def test_mcp_exposes_project_scenario_and_loop_contracts(self) -> None:
+        names = {item["name"] for item in MCPServer(self.service)._response({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]}
+        self.assertTrue({
+            "bok_project_contexts",
+            "bok_project_scenario_sources",
+            "bok_discover_project_scenarios",
+            "bok_extract_operational_loop",
+            "bok_operational_loop",
+        }.issubset(names))
 
 
 class PersonalClaimContracts(unittest.TestCase):
@@ -1914,6 +2140,27 @@ class BokAPIContracts(unittest.TestCase):
         self.assertEqual(caught.exception.code, 403)
         with self.assertRaises(HTTPError) as caught:
             self.request("/v1/person/dashboard", token=issued["token"])
+        self.assertEqual(caught.exception.code, 403)
+
+    def test_operational_project_reads_are_agent_scoped_and_extraction_is_admin_only(self) -> None:
+        self.service.project_contexts = lambda limit=200: {"items": [], "total": 0, "limit": limit}
+        reader = self.service.issue_agent_credential("codex", scopes=["vault:read"])
+        with self.request("/v1/operations/projects", body={"limit": 10}, token=reader["token"]) as response:
+            payload = json.load(response)
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["limit"], 10)
+
+        unscoped = self.service.issue_agent_credential("unscoped", scopes=["context:read"])
+        with self.assertRaises(HTTPError) as caught:
+            self.request("/v1/operations/projects", body={"limit": 10}, token=unscoped["token"])
+        self.assertEqual(caught.exception.code, 403)
+
+        with self.assertRaises(HTTPError) as caught:
+            self.request(
+                "/v1/operations/scenarios/discover",
+                body={"project": "Adpilot"},
+                token=reader["token"],
+            )
         self.assertEqual(caught.exception.code, 403)
 
     def test_person_dashboard_api_includes_learning_and_permission_layers(self) -> None:
