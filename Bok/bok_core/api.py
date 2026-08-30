@@ -299,6 +299,7 @@ class BokAPIHandler(BaseHTTPRequestHandler):
                 "/v1/operations/projects",
                 "/v1/operations/sources",
                 "/v1/operations/loop",
+                "/v1/operations/ontology",
                 "/v1/memory/capture",
                 "/v1/conversations/observe",
                 "/v1/person/context",
@@ -358,6 +359,12 @@ class BokAPIHandler(BaseHTTPRequestHandler):
                 if route == "/v1/operations/loop":
                     self._require_scope("vault:read")
                     return service.operational_loop(str(body.get("project", "")), str(body.get("scenario", "")))
+                if route == "/v1/operations/ontology":
+                    self._require_scope("vault:read")
+                    return service.operational_ontology()
+                if route == "/v1/operations/ontology/rebuild":
+                    self._require_admin()
+                    return service.rebuild_operational_ontology(purge_legacy=body.get("purge_legacy") is True)
                 if route == "/v1/memory/capture":
                     self._require_scope("memory:capture")
                     return service.capture_memory(body.get("material", ""), source=body.get("source"), explicit_cloud_consent=body.get("cloud_consent") is True)
@@ -559,7 +566,7 @@ class BokAPIHandler(BaseHTTPRequestHandler):
 
             mutation = route not in {
                 "/v1/search", "/v1/context", "/v1/sources", "/v1/project/resume", "/v1/person/context",
-                "/v1/operations/projects", "/v1/operations/sources", "/v1/operations/scenarios/discover", "/v1/operations/loop",
+                "/v1/operations/projects", "/v1/operations/sources", "/v1/operations/scenarios/discover", "/v1/operations/loop", "/v1/operations/ontology",
             }
             if route in {"/v1/auth/rotate", "/v1/agents/issue"}:
                 payload = invoke()

@@ -97,6 +97,13 @@ TOOLS = [
         "annotations": {"title": "Read an operational loop", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
     {
+        "name": "bok_operational_ontology",
+        "description": "Read the rebuilt FDE operational ontology projection: projects, scenarios, business objects, actions, verification gates, source conversations, and typed relationships.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "outputSchema": {"type": "object"},
+        "annotations": {"title": "Read the operational ontology", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
+    {
         "name": "bok_person_context",
         "description": "Build a minimal context block from effective Personal Core understanding: low-risk evidence-backed learned claims plus user-confirmed protected claims visible to the declared local agent and project.",
         "inputSchema": {
@@ -271,6 +278,7 @@ class MCPServer:
             "bok_operational_loop": lambda value: service.operational_loop(
                 value.get("project", ""), value.get("scenario", "")
             ),
+            "bok_operational_ontology": lambda _value: service.operational_ontology(),
             "bok_person_context": lambda value: service.person_context(
                 task=value.get("task", ""),
                 agent=value.get("agent", ""),

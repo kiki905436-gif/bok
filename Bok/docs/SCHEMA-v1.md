@@ -19,9 +19,14 @@ Project Context → Business Scenario → Operational Loop → Operational Actio
 ```text
 06-Business/Projects/<project-id>/Project.md
 06-Business/Projects/<project-id>/Scenarios/<scenario-id>.md
+06-Business/Operational-Ontology.md
 ```
 
-`Project.md` 是项目基线索引，记录项目上下文、源会话数量、发现的业务场景、已物化闭环数量和场景链接；单个闭环文件继续承载可执行流程和证据。批量提炼中断时，断点状态保存在 `.bok/state/operational-batches/`，它只用于续跑，不替代 Markdown 事实源。
+`Project.md` 是项目基线索引，记录项目上下文、源会话数量、已物化闭环数量和场景链接；单个闭环文件继续承载可执行流程和证据。`Operational-Ontology.md` 是所有项目的重建式入口。每个闭环成功写入后，Bok 必须同步重建当前项目基线、全局入口、两套检索索引和 `.bok/state/operational-ontology/projection.json` 图谱投影；其中 `.bok` 文件可随时丢弃重建，不是事实源。批量提炼中断时，断点状态保存在 `.bok/state/operational-batches/`，它只用于续跑。
+
+图谱投影只允许由 Project Context、Business Scenario、Business Object、Operational Action、Verification Gate 和 Source Conversation 构成，并使用 `contains / operates-on / has-action / verified-by / evidenced-by` 真实关系。禁止再把所有 Markdown 按共享标签补边冒充知识图谱。
+
+旧的 `03-Knowledge/Codex-Experience/` 摘要卡仅是迁移期产物。执行带 `--purge-legacy` 的全量重建时，Bok 会先创建可校验备份，再把这些卡和 Starter 示例移入可恢复废纸篓，最后清空旧 embedding 缓存并重建系统投影。
 
 frontmatter 至少包含：
 

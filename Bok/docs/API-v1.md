@@ -112,7 +112,11 @@
 
 `source_refs` 可选；场景发现已经选出会话时应显式传入，保证提炼使用同一证据集。省略时才在项目边界内按 `query` 检索。提炼过程不会自动把结果标为已验证：存在缺口或冲突时状态为 `needs_evidence`，否则为 `draft`。真实业务执行和回读验收是进入 `validated` 的必要条件。
 
-CLI 额外提供 `bok operations compile` 批量编排入口：它过滤临时目录和容器目录，以项目为单位发现多个场景，逐场景提炼，生成项目 `Project.md` 索引，并在 `.bok/state/operational-batches/` 保存可续跑状态。可用 `--project` 限定项目、`--max-scenarios` 控制每项目场景数、`--dry-run` 只检查项目范围。已存在的闭环默认跳过，`--force` 才重新提炼。
+CLI 额外提供 `bok operations compile` 批量编排入口：它过滤临时目录和容器目录，以项目为单位发现多个场景，逐场景提炼，并在 `.bok/state/operational-batches/` 保存可续跑状态。可用 `--project` 限定项目、`--max-scenarios` 控制每项目场景数、`--dry-run` 只检查项目范围。已存在的闭环默认跳过，`--force` 才重新提炼。
+
+每个闭环完成后会立即执行 Ontology Publication：重建项目 `Project.md`、全局 `Operational-Ontology.md`、默认/全量检索索引和带类型关系的知识图谱。任何一步失败时，该次提炼不返回完成。`bok operations projection` 可读取当前投影；`bok operations rebuild` 可从 Markdown 事实源全量重建；首次迁移可显式使用 `bok operations rebuild --purge-legacy`，该操作先备份再清理旧经验卡、旧 embedding 数据并重建全部投影。
+
+API 对应提供只读 `/operations/ontology` 与管理员 `/operations/ontology/rebuild`；后者通过 `{"purge_legacy":true}` 启用可恢复清理。MCP 的 `bok_operational_ontology` 向 Agent 返回项目、场景、业务对象、动作、验证门、来源会话及真实关系。
 
 首选提取模型受额度、限流或模型可用性阻断时，Bok 自动尝试配置的后备模型；错误收据只记录模型、失败原因和退出码，不回显包含源会话的 CLI 输入。
 

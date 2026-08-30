@@ -201,6 +201,17 @@ class VaultCache:
 
         for item in skipped:
             parts.append(f"skipped:{item['path']}:{item['error']}")
+        ontology_projection_path = VAULT_ROOT / ".bok" / "state" / "operational-ontology" / "projection.json"
+        try:
+            projection_stat = ontology_projection_path.stat()
+            if ontology_projection_path.is_symlink() or projection_stat.st_size > 8 * 1024 * 1024:
+                raise OSError("Operational ontology projection is not a safe local file.")
+            parts.append(f"ontology-projection:{projection_stat.st_mtime_ns}:{projection_stat.st_size}")
+        except FileNotFoundError:
+            projection_stat = None
+        except OSError as error:
+            projection_stat = None
+            skipped.append(diagnostic(ontology_projection_path, error))
         source_fingerprint = hashlib.sha256(
             "|".join(parts).encode("utf-8")
         ).hexdigest()
@@ -239,10 +250,22 @@ class VaultCache:
                 }
             )
 
+        ontology_graph = None
+        if projection_stat is not None:
+            try:
+                candidate = json.loads(ontology_projection_path.read_text(encoding="utf-8"))
+                if isinstance(candidate, dict) and isinstance(candidate.get("nodes"), list) and isinstance(candidate.get("edges"), list):
+                    ontology_graph = candidate
+                else:
+                    raise ValueError("Operational ontology projection has an invalid shape.")
+            except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+                unreadable.append(diagnostic(ontology_projection_path, error))
+
         payload = json.dumps(
             {
                 "root": VAULT_ROOT.name,
                 "files": files,
+                "ontologyGraph": ontology_graph,
                 "skipped": skipped,
                 "unreadable": unreadable,
             },

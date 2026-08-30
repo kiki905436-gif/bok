@@ -93,6 +93,9 @@ def parser() -> argparse.ArgumentParser:
     operation_compile.add_argument("--include-non-git", action="store_true")
     operation_compile.add_argument("--force", action="store_true")
     operation_compile.add_argument("--dry-run", action="store_true")
+    operation_rebuild = operation_commands.add_parser("rebuild", help="Rebuild project indexes, search data, and the operational knowledge graph")
+    operation_rebuild.add_argument("--purge-legacy", action="store_true", help="Back up and remove legacy imported experience cards before rebuilding")
+    operation_commands.add_parser("projection", help="Read the current operational ontology projection")
     operation_get = operation_commands.add_parser("get")
     operation_get.add_argument("project")
     operation_get.add_argument("scenario")
@@ -351,6 +354,10 @@ def _run_operations(service: BokService, arguments) -> dict:
             force=arguments.force,
             dry_run=arguments.dry_run,
         )
+    if command == "rebuild":
+        return service.rebuild_operational_ontology(purge_legacy=arguments.purge_legacy)
+    if command == "projection":
+        return service.operational_ontology()
     if command == "get":
         return service.operational_loop(arguments.project, arguments.scenario)
     raise BokError("unknown_operations_command", "Unknown operational ontology command")

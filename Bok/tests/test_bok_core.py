@@ -1115,7 +1115,13 @@ class OperationalExperienceContracts(unittest.TestCase):
                 }
 
         runner = FakeRunner()
-        operations = OperationalExperience(self.config, self.service.storage, runner=runner)
+        index_rebuilds = []
+        operations = OperationalExperience(
+            self.config,
+            self.service.storage,
+            runner=runner,
+            index_refresher=lambda clear: index_rebuilds.append(clear) or {"status": "rebuilt"},
+        )
         result = operations.extract(
             "Adpilot",
             "泰国 TikTok API 接入与经营看板",
@@ -1133,6 +1139,39 @@ class OperationalExperienceContracts(unittest.TestCase):
         self.assertIn("## 验证门", text)
         self.assertIn("codex-session:adpilot-api", text)
         self.assertIn("codex-session:adpilot-dashboard", text)
+        self.assertEqual(index_rebuilds, [False])
+        self.assertEqual(result["publication"]["search_index"]["status"], "rebuilt")
+        self.assertTrue(self.service.storage.content_hash("06-Business/Operational-Ontology.md"))
+        project_documents = list(result["publication"]["projects"].values())
+        self.assertEqual(len(project_documents), 1)
+        self.assertTrue(self.service.storage.content_hash(project_documents[0]["path"]))
+        projection = operations.projection()
+        self.assertEqual(projection["status"], "ready")
+        self.assertEqual(projection["counts"]["by_kind"]["scenario"], 1)
+        self.assertEqual(projection["counts"]["by_kind"]["action"], 1)
+        self.assertEqual(projection["counts"]["by_kind"]["verification-gate"], 1)
+        self.assertGreaterEqual(projection["counts"]["by_kind"]["source"], 2)
+
+    def test_full_rebuild_backs_up_and_purges_legacy_cards(self) -> None:
+        legacy_paths = (
+            "03-Knowledge/Codex-Experience/old-summary.md",
+            "02-Projects/codex-experience-vault.md",
+            "03-Knowledge/knowledge-card-example.md",
+        )
+        for relative in legacy_paths:
+            target = self.vault / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("# legacy\n", encoding="utf-8")
+        operations = OperationalExperience(self.config, self.service.storage, runner=object())
+        result = operations.rebuild(purge_legacy=True)
+        self.assertEqual(result["cleanup"]["removed"], len(legacy_paths))
+        self.assertTrue(result["cleanup"]["recoverable"])
+        backup = result["cleanup"]["backup"]
+        self.assertTrue(self.service.storage.verify_backup(backup["backup_id"])["valid"])
+        for relative in legacy_paths:
+            self.assertFalse((self.vault / relative).exists())
+        self.assertTrue((self.vault / "06-Business/Operational-Ontology.md").is_file())
+        self.assertEqual(operations.projection()["status"], "ready")
 
     def test_batch_compiler_discovers_multiple_scenarios_and_resumes(self) -> None:
         class BatchRunner:
@@ -1240,6 +1279,7 @@ class OperationalExperienceContracts(unittest.TestCase):
             "bok_discover_project_scenarios",
             "bok_extract_operational_loop",
             "bok_operational_loop",
+            "bok_operational_ontology",
         }.issubset(names))
 
 

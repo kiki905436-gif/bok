@@ -43,6 +43,7 @@ const state = {
   visibleCardCount: CONFIG.cardPageSize,
   selectedPath: null,
   currentReaderPath: null,
+  ontologyGraph: null,
   atlasFrame: null,
   atlasNodes: [],
   atlasEdges: [],
@@ -580,12 +581,14 @@ async function readServerVault({ force = false, announce = false } = {}) {
       { lastModified: file.lastModified, size: file.size },
       { truncated: file.truncated, contentHash: file.contentHash },
     ));
-    const fingerprint = makeFingerprint(records);
+    const ontologyFingerprint = String(payload.ontologyGraph?.canonical_fingerprint || "");
+    const fingerprint = `${makeFingerprint(records)}|${ontologyFingerprint}`;
     if (!force && fingerprint === state.fingerprint) {
       renderHealth();
       return;
     }
     state.serverMode = true;
+    state.ontologyGraph = payload.ontologyGraph && Array.isArray(payload.ontologyGraph.nodes) && Array.isArray(payload.ontologyGraph.edges) ? payload.ontologyGraph : null;
     state.vaultName = String(payload.root || "AI-Second-Brain-Lite");
     state.rawFileCount = records.length;
     state.files = dedupeRecords(records);
@@ -2500,7 +2503,16 @@ async function revealCurrentFile() {
   } catch { showToast("Finder 定位失败，路径已保留在阅读器顶部。"); }
 }
 
-const ATLAS_COLORS = { projects: "#4f78d7", knowledge: "#168d7c", content: "#d98b3a", prompts: "#8065c9", business: "#cf6f68", skills: "#2f9db2", archive: "#8e8a82", system: "#71808c" };
+const ATLAS_COLORS = {
+  ontology: "#183a3d", project: "#4f78d7", scenario: "#cf6f68", "business-object": "#d98b3a",
+  action: "#168d7c", "verification-gate": "#8065c9", source: "#71808c",
+  projects: "#4f78d7", knowledge: "#168d7c", content: "#d98b3a", prompts: "#8065c9",
+  business: "#cf6f68", skills: "#2f9db2", archive: "#8e8a82", system: "#71808c",
+};
+const ATLAS_KIND_LABELS = {
+  ontology: "本体", project: "项目", scenario: "业务场景", "business-object": "业务对象",
+  action: "业务动作", "verification-gate": "验证门", source: "来源会话",
+};
 
 function hashNumber(value) {
   let hash = 2166136261;
@@ -2511,6 +2523,14 @@ function hashNumber(value) {
 function recordRelations(record, records) {
   const targets = new Set();
   for (const match of record.text.matchAll(/\[[^\]]+\]\(([^)]+\.md(?:#[^)]+)?)\)/giu)) targets.add(resolveVaultPath(record.path, match[1]));
+  for (const match of record.text.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/gu)) {
+    const raw = match[1].trim();
+    const candidate = raw.endsWith(".md") ? raw : `${raw}.md`;
+    const absolute = normalizePath(candidate);
+    const relative = resolveVaultPath(record.path, candidate);
+    const target = records.find((item) => item.path === absolute || item.path === relative);
+    if (target) targets.add(target.path);
+  }
   [record.frontmatter.related, record.frontmatter.derived_from].forEach((raw) => termList(raw).forEach((value) => {
     const normalized = resolveVaultPath(record.path, value);
     const match = records.find((item) => item.path === normalized || item.title.toLocaleLowerCase("zh-CN") === value.toLocaleLowerCase("zh-CN"));
@@ -2545,7 +2565,7 @@ function buildAtlas(records, width, height) {
     const groupCenter = groups[group];
     const x = Math.max(20, Math.min(width - 20, groupCenter.x + Math.cos(localAngle) * localRadius));
     const y = Math.max(54, Math.min(height - 20, groupCenter.y + Math.sin(localAngle) * localRadius * 0.62));
-    return { record, group, x, y, vx: 0, vy: 0, radius: 4.8, degree: 0, color: ATLAS_COLORS[record.category.nav] || "#168d7c" };
+    return { id: record.path, targetPath: record.path, kind: record.category.nav, record, group, x, y, vx: 0, vy: 0, radius: 4.8, degree: 0, color: ATLAS_COLORS[record.category.nav] || "#168d7c" };
   });
   const indexByPath = new Map(nodes.map((node, index) => [node.record.path, index]));
   const edgeKeys = new Set();
@@ -2557,19 +2577,59 @@ function buildAtlas(records, width, height) {
     edgeKeys.add(key); edges.push({ a, b, kind });
   };
   nodes.forEach((node, source) => recordRelations(node.record, records).forEach((path) => add(source, indexByPath.get(path), "reference")));
-  const connected = new Set(edges.flatMap((edge) => [edge.a, edge.b]));
-  const byTag = new Map();
-  nodes.forEach((node, index) => node.record.tags.filter((tag) => tag !== node.record.category.type).slice(0, 3).forEach((tag) => {
-    const key = tag.toLocaleLowerCase("zh-CN");
-    if (!byTag.has(key)) byTag.set(key, []);
-    byTag.get(key).push(index);
-  }));
-  byTag.forEach((indices) => {
-    const anchor = indices.find((index) => connected.has(index)) ?? indices[0];
-    indices.filter((index) => !connected.has(index)).slice(0, 4).forEach((index) => { add(anchor, index, "tag"); connected.add(index); });
-  });
   edges.forEach((edge) => { nodes[edge.a].degree += 1; nodes[edge.b].degree += 1; });
   nodes.forEach((node) => { node.radius = 4.8 + Math.min(4.8, node.degree * 0.56); });
+  return { nodes, edges, groups };
+}
+
+function buildOntologyAtlas(projection, width, height) {
+  const sourceNodes = Array.isArray(projection?.nodes) ? projection.nodes : [];
+  const categories = [...new Set(sourceNodes.map((node) => node.kind || "ontology"))];
+  const categoryIndex = new Map(categories.map((category, index) => [category, index]));
+  const groups = categories.map((category, group) => {
+    const angle = group / Math.max(1, categories.length) * Math.PI * 2 - Math.PI / 2;
+    return {
+      category,
+      label: ATLAS_KIND_LABELS[category] || category,
+      x: width * 0.5 + Math.cos(angle) * Math.min(width * 0.19, 210),
+      y: height * 0.5 + Math.sin(angle) * Math.min(height * 0.17, 96),
+      color: ATLAS_COLORS[category] || "#168d7c",
+      count: sourceNodes.filter((node) => node.kind === category).length,
+    };
+  });
+  const offsets = new Map();
+  const nodes = sourceNodes.map((source) => {
+    const kind = source.kind || "ontology";
+    const group = categoryIndex.get(kind) || 0;
+    const offset = offsets.get(group) || 0;
+    offsets.set(group, offset + 1);
+    const seed = hashNumber(String(source.id || source.label || offset));
+    const localAngle = offset * 2.399963 + (seed % 41) / 41 * 0.35;
+    const localRadius = 24 + Math.sqrt(offset) * 8.5;
+    const center = groups[group];
+    const targetPath = String(source.path || source.document_path || "");
+    const record = {
+      path: targetPath || `@ontology/${source.id}`,
+      title: String(source.label || source.id || "未命名节点"),
+      category: { nav: kind, type: ATLAS_KIND_LABELS[kind] || kind },
+    };
+    return {
+      id: String(source.id), targetPath, kind, record, group,
+      x: Math.max(20, Math.min(width - 20, center.x + Math.cos(localAngle) * localRadius)),
+      y: Math.max(54, Math.min(height - 20, center.y + Math.sin(localAngle) * localRadius * 0.62)),
+      vx: 0, vy: 0, radius: 4.8, degree: 0, color: ATLAS_COLORS[kind] || "#168d7c",
+    };
+  });
+  const byId = new Map(nodes.map((node, index) => [node.id, index]));
+  const edges = [];
+  (projection.edges || []).forEach((edge) => {
+    const a = byId.get(String(edge.source));
+    const b = byId.get(String(edge.target));
+    if (a === undefined || b === undefined || a === b) return;
+    edges.push({ a, b, kind: String(edge.kind || "relationship") });
+  });
+  edges.forEach((edge) => { nodes[edge.a].degree += 1; nodes[edge.b].degree += 1; });
+  nodes.forEach((node) => { node.radius = 4.8 + Math.min(5.4, node.degree * 0.52); });
   return { nodes, edges, groups };
 }
 
@@ -2590,34 +2650,38 @@ function paperScrapPath(context, width, height, seed = 0) {
 function renderAtlas() {
   if (state.atlasFrame) cancelAnimationFrame(state.atlasFrame);
   state.atlasFrame = null;
-  const records = state.files.filter((record) => scopeAllows(record, "library"));
-  elements.atlasEmpty.hidden = records.length > 0;
-  elements.knowledgeGraph.hidden = records.length === 0;
-  elements.atlasNodeList.innerHTML = records.slice().sort((a, b) => a.title.localeCompare(b.title, "zh-CN")).map((record) => `<li><button data-open="${escapeHtml(record.path)}"><span style="--node-color:${ATLAS_COLORS[record.category.nav] || "#168d7c"}"></span><strong>${escapeHtml(record.title)}</strong><small>${escapeHtml(record.category.type)}</small></button></li>`).join("");
-  elements.atlasNodeList.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => activateAtlasNode(button.dataset.open)));
-  if (!records.length) return;
-  const graph = buildAtlas(records, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight);
+  const hasProjection = Array.isArray(state.ontologyGraph?.nodes) && state.ontologyGraph.nodes.length > 0;
+  const records = state.files.filter((record) => ["ontology-projection", "project-context", "operational-loop"].includes(String(record.frontmatter.type || "")));
+  const graph = hasProjection
+    ? buildOntologyAtlas(state.ontologyGraph, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight)
+    : buildAtlas(records, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight);
+  elements.atlasEmpty.hidden = graph.nodes.length > 0;
+  elements.knowledgeGraph.hidden = graph.nodes.length === 0;
+  elements.atlasNodeList.innerHTML = graph.nodes.slice().sort((a, b) => a.record.title.localeCompare(b.record.title, "zh-CN")).map((node) => `<li><button data-atlas-node="${escapeHtml(node.id)}"><span style="--node-color:${ATLAS_COLORS[node.kind] || "#168d7c"}"></span><strong>${escapeHtml(node.record.title)}</strong><small>${escapeHtml(ATLAS_KIND_LABELS[node.kind] || node.record.category.type)}</small></button></li>`).join("");
+  elements.atlasNodeList.querySelectorAll("[data-atlas-node]").forEach((button) => button.addEventListener("click", () => activateAtlasNode(button.dataset.atlasNode)));
+  if (!graph.nodes.length) return;
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
   state.atlasSimulationAlpha = state.reduceMotion ? 0 : 1;
   state.atlasLastTime = 0;
   state.atlasCamera = { x: 0, y: 0, scale: 1 };
-  const references = graph.edges.filter((edge) => edge.kind === "reference").length;
-  elements.atlasStats.innerHTML = `<span><strong>${records.length}</strong> 节点</span><span><strong>${references}</strong> 真实引用</span><span><strong>${graph.edges.length - references}</strong> 标签补边</span>`;
+  elements.atlasStats.innerHTML = `<span><strong>${graph.nodes.length}</strong> 本体节点</span><span><strong>${graph.edges.length}</strong> 真实关系</span><span><strong>${hasProjection ? state.ontologyGraph.canonical_documents?.length || 0 : records.length}</strong> 事实文档</span>`;
   const counts = new Map();
-  records.forEach((record) => counts.set(record.category.nav, { label: record.category.type, count: (counts.get(record.category.nav)?.count || 0) + 1 }));
+  graph.nodes.forEach((node) => counts.set(node.kind, { label: ATLAS_KIND_LABELS[node.kind] || node.record.category.type, count: (counts.get(node.kind)?.count || 0) + 1 }));
   elements.atlasLegend.innerHTML = [...counts.entries()].map(([key, item]) => `<span><i style="background:${ATLAS_COLORS[key] || "#168d7c"}"></i>${escapeHtml(item.label)} ${item.count}</span>`).join("");
   drawAtlas(0);
 }
 
-function activateAtlasNode(path) {
-  const node = state.atlasNodes.find((item) => item.record.path === path);
+function activateAtlasNode(identifier) {
+  const node = state.atlasNodes.find((item) => item.id === identifier || item.record.path === identifier);
   if (!node) return;
-  state.atlasSelectedPath = path;
-  elements.knowledgeGraph.dataset.selectedPath = path;
+  state.atlasSelectedPath = node.id;
+  elements.knowledgeGraph.dataset.selectedPath = node.id;
   if (state.atlasFrame) cancelAnimationFrame(state.atlasFrame);
   state.atlasFrame = null;
   drawAtlas(0);
-  window.setTimeout(() => selectRecord(path, true), state.reduceMotion ? 0 : 140);
+  if (node.targetPath && state.files.some((record) => record.path === node.targetPath)) {
+    window.setTimeout(() => selectRecord(node.targetPath, true), state.reduceMotion ? 0 : 140);
+  }
 }
 
 function atlasWorldToScreen(point, width, height) {
@@ -2728,7 +2792,7 @@ function drawAtlas(time = 0) {
   const movement = animate && state.atlasSimulationAlpha > 0.012 ? stepAtlasPhysics(width, height) : 0;
   const hoveredNode = atlasNodeAt(state.atlasPointer, width, height);
   const hoveredIndex = hoveredNode ? state.atlasNodes.indexOf(hoveredNode) : -1;
-  const selectedIndex = state.atlasNodes.findIndex((node) => node.record.path === state.atlasSelectedPath);
+  const selectedIndex = state.atlasNodes.findIndex((node) => node.id === state.atlasSelectedPath || node.record.path === state.atlasSelectedPath);
   const focusIndex = hoveredIndex >= 0 ? hoveredIndex : selectedIndex;
   const connected = new Set();
   if (focusIndex >= 0) {
@@ -2792,7 +2856,7 @@ function drawAtlas(time = 0) {
   if (hovered) {
     const screen = atlasWorldToScreen(hovered, width, height);
     elements.atlasTooltip.hidden = false;
-    elements.atlasTooltip.innerHTML = `<strong>${escapeHtml(hovered.record.title)}</strong><span>${escapeHtml(hovered.record.category.type)} · ${hovered.degree} 个关联</span>`;
+    elements.atlasTooltip.innerHTML = `<strong>${escapeHtml(hovered.record.title)}</strong><span>${escapeHtml(ATLAS_KIND_LABELS[hovered.kind] || hovered.record.category.type)} · ${hovered.degree} 个关联</span>`;
     elements.atlasTooltip.style.left = `${Math.max(12, Math.min(width - 230, screen.x + 14))}px`;
     elements.atlasTooltip.style.top = `${Math.max(52, Math.min(height - 72, screen.y - 22))}px`;
     canvas.style.cursor = "pointer";
@@ -3082,7 +3146,7 @@ elements.knowledgeGraph.addEventListener("pointerleave", () => {
 elements.knowledgeGraph.addEventListener("click", () => {
   if (state.atlasSuppressClick) { state.atlasSuppressClick = false; return; }
   const node = atlasNodeAt(state.atlasPointer, elements.knowledgeGraph.clientWidth, elements.knowledgeGraph.clientHeight);
-  if (node) activateAtlasNode(node.record.path);
+  if (node) activateAtlasNode(node.id);
 });
 elements.knowledgeGraph.addEventListener("wheel", (event) => {
   event.preventDefault();
