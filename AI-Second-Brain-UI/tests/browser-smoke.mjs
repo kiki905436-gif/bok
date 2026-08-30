@@ -114,6 +114,12 @@ for (let attempt = 0; attempt < 160; attempt += 1) {
 }
 
 const overview = await evaluate(`({
+  primaryNav: [...document.querySelectorAll('#navList > .nav-item, #libraryNavGroup > .nav-group-toggle')].map((item) => item.getAttribute('aria-label')),
+  primaryNavVisible: [...document.querySelectorAll('#navList > .nav-item, #libraryNavGroup > .nav-group-toggle')].every((item) => {
+    const rect = item.getBoundingClientRect();
+    const style = getComputedStyle(item);
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  }),
   focus: document.querySelector('#focusCard')?.innerText || '',
   actions: document.querySelector('#actionList')?.innerText || '',
   files: document.querySelector('#fileCount')?.innerText || '',
@@ -123,6 +129,8 @@ const overview = await evaluate(`({
   overflow: document.documentElement.scrollWidth > window.innerWidth,
   externalResources: performance.getEntriesByType('resource').map((item) => item.name).filter((url) => !url.startsWith(location.origin)),
 })`);
+const expectedPrimaryNav = ["总览", "Bok 工作台", "知识全景", "生产管线", "健康中心", "关于我", "展开全部分类"];
+if (JSON.stringify(overview.primaryNav) !== JSON.stringify(expectedPrimaryNav) || !overview.primaryNavVisible) throw new Error(`Original product navigation changed or became hidden: ${JSON.stringify(overview.primaryNav)}`);
 if (!overview.focus.includes(focusTitle)) throw new Error(`Homepage focus is stale: ${overview.focus}`);
 if (!overview.actions.includes(expectedAction)) throw new Error(`Next actions are stale: ${overview.actions}`);
 if (overview.sync !== "本地同步中") throw new Error(`Unexpected sync state: ${overview.sync}`);

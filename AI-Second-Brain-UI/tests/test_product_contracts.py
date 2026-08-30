@@ -70,6 +70,32 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('"下一步行动"', browser_source)
         self.assertIn('"下一步行动"', desktop_source)
 
+    def test_visual_polish_preserves_the_original_product_navigation(self) -> None:
+        html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
+        source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
+        polish = (UI_ROOT / "polish.css").read_text(encoding="utf-8-sig")
+        expected_entries = (
+            ('data-view="overview"', 'aria-label="总览"'),
+            ('data-view="memory"', 'aria-label="Bok 工作台"'),
+            ('data-view="atlas"', 'aria-label="知识全景"'),
+            ('data-view="pipeline"', 'aria-label="生产管线"'),
+            ('data-view="health"', 'aria-label="健康中心"'),
+            ('data-view="person"', 'aria-label="关于我"'),
+            ('id="libraryNavGroup"', 'aria-label="展开全部分类"'),
+        )
+        positions = []
+        for marker, label in expected_entries:
+            self.assertIn(marker, html)
+            self.assertIn(label, html)
+            positions.append(html.index(marker))
+        self.assertEqual(positions, sorted(positions))
+        for scope in ("projects", "knowledge", "content", "prompts", "business", "skills", "all"):
+            self.assertIn(f'data-scope="{scope}"', html)
+        self.assertIn('view: "overview"', source)
+        self.assertNotIn("legacy-nav-routes", html)
+        self.assertIn('href="./polish.css?v=20260830-1"', html)
+        self.assertIn("UI-only visual layer", polish)
+
     def test_cross_platform_launchers_have_safe_dependency_paths(self) -> None:
         macos_source = (UI_ROOT / "open-preview.command").read_text(encoding="utf-8-sig")
         windows_source = (UI_ROOT / "open-preview.cmd").read_text(encoding="utf-8-sig")
