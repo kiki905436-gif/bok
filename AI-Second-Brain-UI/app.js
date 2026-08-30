@@ -36,7 +36,7 @@ const state = {
   serverSyncing: false,
   watcher: null,
   lastSync: null,
-  view: "overview",
+  view: "memory",
   scope: "library",
   search: "",
   visibleCardCount: CONFIG.cardPageSize,
@@ -960,14 +960,40 @@ function renderVideoShowcase() {
 }
 
 const VIEW_COPY = {
-  overview: ["LOCAL-FIRST KNOWLEDGE", "你的第二大脑", "项目、知识与方法，在一个本地空间持续生长。"],
-  memory: ["BOK MEMORY", "今天要继续什么", "快速记录、可靠检索、安静记忆和可撤销操作。"],
-  library: ["知识检索", "找到可以复用的内容", "一套范围筛选，不让分类条件互相打架。"],
+  overview: ["LOCAL MEMORY", "Overview", "当前项目、最近内容与下一步行动。"],
+  memory: ["BOK MEMORY", "Today", "继续重要的工作，其他记忆保持安静。"],
+  library: ["KNOWLEDGE VAULT", "Library", "浏览项目、知识、内容与可追溯来源。"],
   pipeline: ["内容生产", "从知识走到成片", "看见每个主题所处阶段和缺失环节。"],
-  atlas: ["关系探索", "知识全景", "用真实引用连接分散的 Markdown。"],
-  health: ["只读诊断", "健康中心", "快速确认索引、环境和待整理事项。"],
-  person: ["PERSONAL CORE", "关于我", "看见它记住了什么、为什么记住，以及哪条记忆影响了回答。"],
+  atlas: ["LIBRARY VIEW", "Knowledge Graph", "只在需要关系探索时展开真实引用网络。"],
+  health: ["SETTINGS", "Diagnostics", "确认索引、运行环境和待整理事项。"],
+  person: ["PERSONAL CORE", "Personal", "查看 Bok 如何理解你，以及每条理解的证据和影响。"],
 };
+
+const MEMORY_VIEW_COPY = {
+  today: ["BOK MEMORY", "Today", "继续重要的工作，其他记忆保持安静。"],
+  search: ["RETRIEVAL", "Search", "用一句话检索知识、项目、来源与历史结论。"],
+  settings: ["LOCAL CONTROL", "Settings", "管理模型边界、Agent 连接和本地备份。"],
+  inbox: ["MEMORY GOVERNANCE", "Memory Inbox", "仅处理需要你介入的重要、冲突或敏感候选。"],
+  notes: ["QUICK CAPTURE", "Quick Notes", "先记录，再决定是否整理为长期记忆。"],
+  activity: ["AUDIT TRAIL", "History", "查看最近变更，并在安全边界内撤销。"],
+};
+
+function renderPrimaryNavigation() {
+  const primaryMemoryTab = ["search", "settings"].includes(state.memoryTab) ? state.memoryTab : "today";
+  elements.navList.querySelectorAll(".nav-item").forEach((button) => {
+    const memoryTarget = button.dataset.memoryTabTarget;
+    const active = button.dataset.view === state.view
+      && (state.view !== "library" || button.dataset.scope === state.scope)
+      && (state.view !== "memory" || memoryTarget === primaryMemoryTab);
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+  });
+}
+
+function renderViewHeader() {
+  const copy = state.view === "memory" ? (MEMORY_VIEW_COPY[state.memoryTab] || VIEW_COPY.memory) : (VIEW_COPY[state.view] || VIEW_COPY.overview);
+  [elements.mainEyebrow.textContent, elements.mainTitle.textContent, elements.mainSubtitle.textContent] = copy;
+}
 
 function setView(view, scope) {
   const viewChanged = state.view !== view;
@@ -986,19 +1012,15 @@ function setView(view, scope) {
 
 function renderView() {
   document.body.dataset.view = state.view;
+  document.body.dataset.memoryTab = state.memoryTab;
   ["overview", "memory", "library", "pipeline", "atlas", "health", "person"].forEach((view) => {
     elements[`${view}View`].hidden = state.view !== view;
   });
-  const copy = VIEW_COPY[state.view] || VIEW_COPY.overview;
-  [elements.mainEyebrow.textContent, elements.mainTitle.textContent, elements.mainSubtitle.textContent] = copy;
+  renderViewHeader();
   const special = ["memory", "pipeline", "atlas", "health", "person"].includes(state.view);
   elements.searchSection.hidden = special;
   document.body.classList.toggle("context-hidden", special);
-  elements.navList.querySelectorAll(".nav-item").forEach((button) => {
-    const active = button.dataset.view === state.view && (state.view !== "library" || button.dataset.scope === state.scope);
-    button.classList.toggle("is-active", active);
-    if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
-  });
+  renderPrimaryNavigation();
   if (elements.libraryNavGroup) elements.libraryNavGroup.open = state.view === "library";
   updateScopeControls();
   if (state.view !== "atlas" && state.atlasFrame) {
@@ -1217,6 +1239,7 @@ function renderMemorySettings() {
 }
 
 function renderMemoryTab() {
+  document.body.dataset.memoryTab = state.memoryTab;
   elements.memoryTabs.querySelectorAll("[data-memory-tab]").forEach((button) => {
     const active = button.dataset.memoryTab === state.memoryTab;
     button.classList.toggle("is-active", active);
@@ -1224,6 +1247,10 @@ function renderMemoryTab() {
     button.tabIndex = active ? 0 : -1;
   });
   elements.memoryWorkspace.querySelectorAll("[data-memory-panel]").forEach((panel) => { panel.hidden = panel.dataset.memoryPanel !== state.memoryTab; });
+  if (state.view === "memory") {
+    renderViewHeader();
+    renderPrimaryNavigation();
+  }
   if (state.memoryTab === "search") window.setTimeout(() => elements.memorySearchInput.focus(), 0);
 }
 
@@ -1698,7 +1725,7 @@ function renderPersonTab() {
   if (state.personTab === "graph") window.requestAnimationFrame(renderPersonGraph);
 }
 
-const PERSON_GRAPH_COLORS = ["#ff3e91", "#276bf0", "#0ca595", "#f1a22b", "#8358d5", "#dc5548", "#278ca7"];
+const PERSON_GRAPH_COLORS = ["#4d7f78", "#607c9b", "#748a78", "#a07a4e", "#7c7192", "#9a6861", "#5c8490"];
 
 function buildPersonGraph(claims, width, height) {
   const grouped = new Map();
@@ -1710,7 +1737,7 @@ function buildPersonGraph(claims, width, height) {
   const groups = [...grouped.entries()].sort((left, right) => (PERSON_TYPE_LABELS[left[0]] || left[0]).localeCompare(PERSON_TYPE_LABELS[right[0]] || right[0], "zh-CN"));
   const compact = groups.length <= 2;
   const center = { x: compact ? width * 0.20 : width * 0.5, y: height * 0.52 };
-  const nodes = [{ kind: "self", id: "self", label: "你", x: center.x, y: center.y, radius: 30, width: 60, height: 60, color: "#172b2d" }];
+  const nodes = [{ kind: "self", id: "self", label: "你", x: center.x, y: center.y, radius: 30, width: 60, height: 60, color: "#1f5f58" }];
   const edges = [];
   const groupRadiusX = Math.min(width * 0.32, 270);
   const groupRadiusY = Math.min(height * 0.30, 150);
@@ -1778,6 +1805,23 @@ function renderPersonGraph() {
   drawPersonGraph();
 }
 
+function canvasRoundedRect(context, x, y, width, height, radius) {
+  if (typeof context.roundRect === "function") {
+    context.roundRect(x, y, width, height, radius);
+    return;
+  }
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+}
+
 function drawPersonGraph() {
   const canvas = elements.personGraph;
   if (!canvas || canvas.hidden) return;
@@ -1804,10 +1848,10 @@ function drawPersonGraph() {
     const first = state.personGraphNodes[edge.a];
     const second = state.personGraphNodes[edge.b];
     const active = hoveredIndex < 0 || connected.has(edge.a) && connected.has(edge.b);
-    context.globalAlpha = active ? 0.58 : 0.10;
+    context.globalAlpha = active ? 0.42 : 0.08;
     context.strokeStyle = second.color;
-    context.lineWidth = edge.kind === "group" ? 2 : 1.2;
-    context.setLineDash(edge.kind === "group" ? [6, 5] : []);
+    context.lineWidth = edge.kind === "group" ? 1.5 : 1;
+    context.setLineDash([]);
     context.beginPath();
     context.moveTo(first.x, first.y);
     const bend = (first.x + second.x) / 2 + (second.y - first.y) * 0.08;
@@ -1821,48 +1865,37 @@ function drawPersonGraph() {
     context.save();
     context.translate(node.x, node.y);
     if (node.kind === "self") {
-      context.fillStyle = "rgba(255,62,145,.28)";
-      context.fillRect(-34, -31, 68, 68);
-      context.fillStyle = node.color;
-      context.fillRect(-30, -35, 60, 60);
-    } else if (node.kind === "group") {
-      context.rotate((hashNumber(node.id) % 7 - 3) * Math.PI / 180);
-      context.translate(4, 5);
-      paperScrapPath(context, node.width, node.height, hashNumber(node.id));
-      context.fillStyle = "rgba(23,43,45,.16)";
+      context.fillStyle = "rgba(31,95,88,.10)";
+      context.beginPath();
+      context.arc(0, 0, 35, 0, Math.PI * 2);
       context.fill();
-      context.translate(-4, -5);
-      paperScrapPath(context, node.width, node.height, hashNumber(node.id));
       context.fillStyle = node.color;
+      context.beginPath();
+      context.arc(0, 0, 29, 0, Math.PI * 2);
       context.fill();
     } else {
-      context.rotate((hashNumber(node.id) % 5 - 2) * Math.PI / 180);
-      context.translate(4, 5);
-      paperScrapPath(context, node.width, node.height, hashNumber(node.id));
-      context.fillStyle = "rgba(23,43,45,.16)";
+      const radius = node.kind === "group" ? 18 : 9;
+      context.beginPath();
+      canvasRoundedRect(context, -node.width / 2, -node.height / 2, node.width, node.height, radius);
+      context.closePath();
+      context.fillStyle = node.kind === "group" ? node.color : "#ffffff";
       context.fill();
-      context.translate(-4, -5);
-      paperScrapPath(context, node.width, node.height, hashNumber(node.id));
-      context.fillStyle = "#fffaf0";
-      context.fill();
-      context.strokeStyle = node.color;
-      context.lineWidth = active ? 3 : 1.5;
+      context.strokeStyle = node.kind === "group" ? node.color : `${node.color}${active ? "ff" : "88"}`;
+      context.lineWidth = active ? 2 : 1;
       context.stroke();
-      context.fillStyle = `${node.color}66`;
-      context.fillRect(-16, -node.height / 2 - 3, 32, 7);
     }
     if (node.kind !== "claim") {
       context.fillStyle = "white";
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.font = node.kind === "self" ? '22px "Fusion Pixel", sans-serif' : '10px "Microsoft YaHei UI", sans-serif';
+      context.font = node.kind === "self" ? '600 16px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif' : '500 10px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
       const label = node.kind === "self" ? node.label : node.label.slice(0, 5);
       context.fillText(label, 0, node.kind === "self" ? -4 : 0);
     } else {
       context.fillStyle = "#172b2d";
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.font = '9px "Microsoft YaHei UI", sans-serif';
+      context.font = '9px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
       const label = node.label.length > 12 ? `${node.label.slice(0, 12)}…` : node.label;
       context.fillText(label, 0, 2);
     }
@@ -2890,7 +2923,10 @@ elements.loadMore.addEventListener("click", () => { state.visibleCardCount += CO
 elements.viewAllCards.addEventListener("click", () => setView("library", "library"));
 elements.navList.addEventListener("click", (event) => {
   const button = event.target.closest(".nav-item");
-  if (button) setView(button.dataset.view, button.dataset.scope);
+  if (!button) return;
+  if (button.dataset.memoryTabTarget) state.memoryTab = button.dataset.memoryTabTarget;
+  setView(button.dataset.view, button.dataset.scope);
+  if (button.dataset.memoryTabTarget) renderMemoryTab();
 });
 elements.filterRow.addEventListener("click", (event) => {
   const button = event.target.closest("[data-scope]");
@@ -3046,12 +3082,22 @@ document.addEventListener("keydown", (event) => {
     openQuickNoteWindow();
     return;
   }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase("en-US") === "k") { event.preventDefault(); elements.searchInput.focus(); }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase("en-US") === "k") {
+    event.preventDefault();
+    if (state.view === "memory") setMemoryTab("search");
+    else elements.searchInput.focus();
+  }
   if (event.key === "Escape" && state.selectedPath && !elements.readerDialog.open) { state.selectedPath = null; renderCards(); renderGlobalContext(); }
 });
 
 const platformName = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
 elements.searchShortcut.textContent = /win/iu.test(platformName) ? "Ctrl K" : "⌘ K";
 setSyncState("idle", "正在连接");
-renderView();
-bootstrapLocalServer().then((connected) => { if (!connected) setSyncState("idle", "等待连接"); });
+setView("memory", "library");
+bootstrapLocalServer().then((connected) => {
+  if (!connected) {
+    setSyncState("idle", "等待连接");
+    return;
+  }
+  if (state.view === "memory" && !state.memoryData) loadMemoryWorkspace();
+});

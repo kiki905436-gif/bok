@@ -3,50 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Boujoy知识库的本地工作台" />
-    <title>Boujoy知识库</title>
+    <meta name="description" content="Bok 本地长期记忆工作台" />
+    <title>Bok · Local Memory</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css?v=20260824-22" />
+    <link rel="stylesheet" href="./calm.css?v=20260830-1" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="知识库导航">
+      <aside class="sidebar" aria-label="Bok 导航">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">B</div>
-          <div class="brand-copy"><strong>BOUJOY</strong><span>知识库</span></div>
+          <div class="brand-copy"><strong>Bok</strong><span>Local memory</span></div>
         </div>
 
         <nav class="nav-list" id="navList">
-          <button class="nav-item is-active" data-view="overview" data-scope="library" aria-current="page" aria-label="总览">
-            <span class="nav-number">01</span><span class="nav-copy"><strong>总览</strong><small>HOME</small></span>
+          <button class="nav-item is-active" data-view="memory" data-scope="library" data-memory-tab-target="today" aria-current="page" aria-label="Today">
+            <span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-copy"><strong>Today</strong><small>继续当前工作</small></span>
           </button>
-          <button class="nav-item" data-view="memory" data-scope="library" aria-controls="memoryView" aria-label="Bok 工作台">
-            <span class="nav-number">02</span><span class="nav-copy"><strong>Bok 工作台</strong><small>MEMORY</small></span>
+          <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="search" aria-controls="memoryView" aria-label="Search">
+            <span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-copy"><strong>Search</strong><small>检索长期记忆</small></span>
           </button>
-          <button class="nav-item" data-view="atlas" data-scope="library" aria-label="知识全景">
-            <span class="nav-number">03</span><span class="nav-copy"><strong>知识全景</strong><small>GRAPH</small></span>
+          <button class="nav-item" data-view="library" data-scope="all" aria-label="Library">
+            <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-copy"><strong>Library</strong><small>浏览知识与项目</small></span>
           </button>
-          <button class="nav-item" data-view="pipeline" data-scope="library" aria-label="生产管线">
-            <span class="nav-number">04</span><span class="nav-copy"><strong>生产管线</strong><small>PIPELINE</small></span>
+          <button class="nav-item" data-view="person" data-scope="library" aria-controls="personView" aria-label="Personal Core">
+            <span class="nav-icon" aria-hidden="true">◎</span><span class="nav-copy"><strong>Personal</strong><small>理解与证据</small></span>
           </button>
-          <button class="nav-item" data-view="health" data-scope="library" aria-label="健康中心">
-            <span class="nav-number">05</span><span class="nav-copy"><strong>健康中心</strong><small>HEALTH</small></span>
+          <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="settings" aria-controls="memoryView" aria-label="Settings">
+            <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-copy"><strong>Settings</strong><small>模型、备份与连接</small></span>
           </button>
-          <button class="nav-item" data-view="person" data-scope="library" aria-controls="personView" aria-label="关于我">
-            <span class="nav-number">06</span><span class="nav-copy"><strong>关于我</strong><small>PERSONAL</small></span>
-          </button>
-          <details class="nav-group" id="libraryNavGroup">
-            <summary class="nav-group-toggle" aria-label="展开全部分类"><span class="nav-number">07</span><span class="nav-copy"><strong>全部分类</strong><small>LIBRARY</small></span><span class="nav-chevron" aria-hidden="true">⌄</span></summary>
-            <div class="nav-group-items">
-              <button class="nav-item" data-view="library" data-scope="projects" aria-label="项目"><span>项目</span></button>
-              <button class="nav-item" data-view="library" data-scope="knowledge" aria-label="知识库"><span>知识库</span></button>
-              <button class="nav-item" data-view="library" data-scope="content" aria-label="内容"><span>内容</span></button>
-              <button class="nav-item" data-view="library" data-scope="prompts" aria-label="提示词"><span>提示词</span></button>
-              <button class="nav-item" data-view="library" data-scope="business" aria-label="商业"><span>商业</span></button>
-              <button class="nav-item" data-view="library" data-scope="skills" aria-label="Skills"><span>Skills</span></button>
-              <button class="nav-item" data-view="library" data-scope="all" aria-label="全部文件"><span>全部文件</span></button>
-            </div>
-          </details>
+          <div class="legacy-nav-routes" aria-hidden="true">
+            <button class="nav-item" data-view="overview" data-scope="library" tabindex="-1">Overview</button>
+            <button class="nav-item" data-view="atlas" data-scope="library" tabindex="-1">Graph</button>
+            <button class="nav-item" data-view="pipeline" data-scope="library" tabindex="-1">Pipeline</button>
+            <button class="nav-item" data-view="health" data-scope="library" tabindex="-1">Diagnostics</button>
+            <button class="nav-item" data-view="library" data-scope="projects" tabindex="-1">Projects</button>
+            <button class="nav-item" data-view="library" data-scope="knowledge" tabindex="-1">Knowledge</button>
+            <button class="nav-item" data-view="library" data-scope="content" tabindex="-1">Content</button>
+            <button class="nav-item" data-view="library" data-scope="prompts" tabindex="-1">Prompts</button>
+            <button class="nav-item" data-view="library" data-scope="business" tabindex="-1">Business</button>
+            <button class="nav-item" data-view="library" data-scope="skills" tabindex="-1">Skills</button>
+          </div>
         </nav>
 
         <details class="vault-status" aria-live="polite">
@@ -60,15 +58,15 @@
           <input id="folderFallback" type="file" webkitdirectory multiple accept=".md,text/markdown" hidden />
         </details>
 
-        <div class="sidebar-footer"><span>纯 Markdown</span><span>安全可撤销</span></div>
+        <div class="sidebar-footer"><span>Local first</span><span>Markdown</span></div>
       </aside>
 
       <main class="main-panel">
         <header class="main-header">
           <div>
             <p class="eyebrow" id="mainEyebrow"></p>
-            <h1 id="mainTitle">你的第二大脑</h1>
-            <p class="main-subtitle" id="mainSubtitle">项目、知识与方法，在一个本地空间持续生长。</p>
+            <h1 id="mainTitle">Today</h1>
+            <p class="main-subtitle" id="mainSubtitle">继续重要的工作，其他记忆保持安静。</p>
           </div>
           <div class="sync-chip" id="syncChip"><span class="sync-indicator"></span><span id="syncLabel">正在连接</span></div>
         </header>
@@ -156,7 +154,7 @@
             <section class="memory-panel" id="memoryInboxPanel" data-memory-panel="inbox" role="tabpanel" aria-labelledby="memoryInboxTab" hidden><div class="memory-inbox-list" id="memoryInboxList"></div></section>
             <section class="memory-panel" id="memoryNotesPanel" data-memory-panel="notes" role="tabpanel" aria-labelledby="memoryNotesTab" hidden><div class="memory-panel-heading"><div><span class="section-kicker">QUICK NOTES</span><h2>随手记</h2><p>先记下来，不要求标题、分类或标签。</p></div><button class="primary-button" id="memoryNewNote" type="button">记一条</button></div><div class="memory-note-list" id="memoryNoteList"></div></section>
             <section class="memory-panel" id="memoryActivityPanel" data-memory-panel="activity" role="tabpanel" aria-labelledby="memoryActivityTab" hidden><div class="memory-activity-list" id="memoryActivityList"></div></section>
-            <section class="memory-panel" id="memorySettingsPanel" data-memory-panel="settings" role="tabpanel" aria-labelledby="memorySettingsTab" hidden><div class="memory-settings-grid" id="memorySettingsGrid"></div><section class="memory-backup-section"><div class="memory-panel-heading"><div><span class="section-kicker">VAULT BACKUPS</span><h2>知识库本地备份</h2><p>只备份 Markdown；恢复前会再生成一份安全备份。</p></div><button class="primary-button" id="memoryCreateBackup" type="button">立即备份</button></div><div class="memory-backup-list" id="memoryBackupList"></div></section><section class="memory-backup-section" id="memoryPersonalBackupSection" hidden><div class="memory-panel-heading"><div><span class="section-kicker">PERSONAL CORE BACKUPS</span><h2>私人记忆独立备份</h2><p>与项目知识库物理分开，只包含 Personal Core 的 Markdown 事实源。</p></div><button class="primary-button" id="memoryCreatePersonalBackup" type="button">备份私人记忆</button></div><div class="memory-backup-list" id="memoryPersonalBackupList"></div></section></section>
+            <section class="memory-panel" id="memorySettingsPanel" data-memory-panel="settings" role="tabpanel" aria-labelledby="memorySettingsTab" hidden><div class="memory-settings-grid" id="memorySettingsGrid"></div><section class="memory-backup-section diagnostics-entry"><div class="memory-panel-heading"><div><span class="section-kicker">SYSTEM DIAGNOSTICS</span><h2>系统诊断</h2><p>查看索引完整性、运行环境和安全清理候选。</p></div><button class="person-action" type="button" data-go-view="health">打开诊断</button></div></section><section class="memory-backup-section"><div class="memory-panel-heading"><div><span class="section-kicker">VAULT BACKUPS</span><h2>知识库本地备份</h2><p>只备份 Markdown；恢复前会再生成一份安全备份。</p></div><button class="primary-button" id="memoryCreateBackup" type="button">立即备份</button></div><div class="memory-backup-list" id="memoryBackupList"></div></section><section class="memory-backup-section" id="memoryPersonalBackupSection" hidden><div class="memory-panel-heading"><div><span class="section-kicker">PERSONAL CORE BACKUPS</span><h2>私人记忆独立备份</h2><p>与项目知识库物理分开，只包含 Personal Core 的 Markdown 事实源。</p></div><button class="primary-button" id="memoryCreatePersonalBackup" type="button">备份私人记忆</button></div><div class="memory-backup-list" id="memoryPersonalBackupList"></div></section></section>
           </div>
         </section>
 
@@ -164,7 +162,7 @@
           <section class="cards-section library-cards-section">
             <div class="section-heading">
               <div><span class="section-kicker">KNOWLEDGE LIBRARY</span><h2 id="cardsTitle">知识库</h2></div>
-              <span class="result-count" id="resultCount">读取中</span>
+              <div class="library-view-actions"><span class="result-count" id="resultCount">读取中</span><button class="view-toggle is-active" type="button" aria-pressed="true">列表</button><button class="view-toggle" type="button" data-go-view="atlas" aria-pressed="false">关系图</button></div>
             </div>
             <div class="card-grid" id="cardGrid"></div>
             <div class="load-more-row" id="loadMoreRow" hidden><button class="load-more-button" id="loadMore" type="button">加载更多</button></div>
@@ -351,6 +349,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260824-11" defer></script>
+    <script src="./app.js?v=20260830-1" defer></script>
   </body>
 </html>

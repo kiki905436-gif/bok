@@ -114,6 +114,10 @@ for (let attempt = 0; attempt < 160; attempt += 1) {
 }
 
 const overview = await evaluate(`({
+  initialView: document.body.dataset.view || '',
+  memoryVisible: !document.querySelector('#memoryView')?.hidden,
+  memoryHeight: Math.round(document.querySelector('#memoryView')?.getBoundingClientRect().height || 0),
+  primaryNav: [...document.querySelectorAll('#navList > .nav-item .nav-copy strong')].map((item) => item.textContent.trim()),
   focus: document.querySelector('#focusCard')?.innerText || '',
   actions: document.querySelector('#actionList')?.innerText || '',
   files: document.querySelector('#fileCount')?.innerText || '',
@@ -123,6 +127,8 @@ const overview = await evaluate(`({
   overflow: document.documentElement.scrollWidth > window.innerWidth,
   externalResources: performance.getEntriesByType('resource').map((item) => item.name).filter((url) => !url.startsWith(location.origin)),
 })`);
+if (overview.initialView !== "memory" || !overview.memoryVisible || overview.memoryHeight < 100) throw new Error(`Today did not render as the initial workspace: ${JSON.stringify(overview)}`);
+if (JSON.stringify(overview.primaryNav) !== JSON.stringify(["Today", "Search", "Library", "Personal", "Settings"])) throw new Error(`Primary navigation is not simplified: ${JSON.stringify(overview.primaryNav)}`);
 if (!overview.focus.includes(focusTitle)) throw new Error(`Homepage focus is stale: ${overview.focus}`);
 if (!overview.actions.includes(expectedAction)) throw new Error(`Next actions are stale: ${overview.actions}`);
 if (overview.sync !== "本地同步中") throw new Error(`Unexpected sync state: ${overview.sync}`);
@@ -184,6 +190,8 @@ if (process.env.BOUJOY_VAULT_SCREENSHOT_PATH) {
   await evaluate("document.querySelector('.vault-status').open = false; true");
 }
 
+await evaluate("setView('library', 'library'); true");
+await delay(80);
 const moreMenu = await evaluate(`(() => {
   const details = document.querySelector('#filterMore');
   const summary = details?.querySelector('summary');
@@ -709,6 +717,12 @@ for (const target of pageTargets) {
   }
   const entry = pageAudits.find((item) => item.view === target.view && item.scope === target.scope);
   if (entry) entry.mobile = audit;
+}
+if (process.env.BOUJOY_MOBILE_SCREENSHOT_PATH) {
+  await evaluate("document.querySelector('[data-view=\"memory\"][data-memory-tab-target=\"today\"]')?.click(); true");
+  await delay(120);
+  const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }, sessionId);
+  writeFileSync(process.env.BOUJOY_MOBILE_SCREENSHOT_PATH, Buffer.from(screenshot.data, "base64"));
 }
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false }, sessionId);
 await evaluate("document.querySelector('[data-view=overview]').click() || true");
