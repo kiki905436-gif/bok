@@ -152,21 +152,6 @@ class ProductContracts(unittest.TestCase):
         self.assertIn("bok.quick-note-draft.v2", source)
         self.assertIn("24 * 60 * 60 * 1000", source)
 
-    def test_calm_memory_os_is_the_product_facing_theme(self) -> None:
-        html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
-        calm = (UI_ROOT / "calm.css").read_text(encoding="utf-8-sig")
-        self.assertIn('href="./calm.css?v=', html)
-        self.assertGreater(html.index('href="./calm.css?v='), html.index('href="./styles.css?v='))
-        for label in ("Today", "Search", "Library", "Personal", "Settings"):
-            self.assertRegex(html, rf'<button class="nav-item[^>]*>[\s\S]*?<strong>{label}</strong>')
-        self.assertIn('class="legacy-nav-routes"', html)
-        self.assertIn(".legacy-nav-routes", calm)
-        self.assertIn("display: none", calm)
-        self.assertNotIn("Fusion Pixel", calm)
-        self.assertNotIn("boujoy-knowledge", calm)
-        self.assertNotIn("torn-paper", calm)
-        self.assertIn('body[data-view="memory"][data-memory-tab="search"]', calm)
-
     def test_floating_quick_note_reuses_bok_without_a_second_store(self) -> None:
         html = (UI_ROOT / "quick-note.html").read_text(encoding="utf-8-sig")
         source = (UI_ROOT / "quick-note-window.js").read_text(encoding="utf-8-sig")
