@@ -28,9 +28,12 @@
   --desk-shadow-small: 0 1px 2px rgba(16, 19, 19, 0.04), 0 6px 18px rgba(16, 19, 19, 0.035);
   --desk-radius: 10px;
   --desk-radius-small: 7px;
+  --desk-font-ui: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  --desk-font-display: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  --desk-font-mono: "SFMono-Regular", Menlo, Consolas, monospace;
   color: var(--desk-ink);
   background: var(--desk-bg);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-family: var(--desk-font-ui);
 }
 
 html,
@@ -46,7 +49,7 @@ input,
 textarea,
 select,
 summary {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-family: var(--desk-font-ui);
   font-synthesis: none;
 }
 
@@ -57,7 +60,10 @@ body {
   background: var(--desk-bg);
   background-image: none;
   font-size: 13px;
+  font-weight: 400;
   line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -160,15 +166,6 @@ summary:focus-visible,
   background-image: none;
 }
 
-.main-header h1,
-.section-heading h2,
-.atlas-toolbar h2,
-.context-header h2,
-.person-graph-copy h2,
-.reader-heading h2,
-.cleanup-dialog-card > h2,
-.memory-panel-heading h2,
-.focus-card h3,
 .memory-tabs button,
 .person-tabs button,
 .filter-pill,
@@ -178,7 +175,21 @@ summary:focus-visible,
 .reader-action,
 .person-action,
 .quick-note-launcher {
-  font-family: inherit !important;
+  font-family: var(--desk-font-ui) !important;
+}
+
+.main-header h1,
+.section-heading h2,
+.atlas-toolbar h2,
+.context-header h2,
+.person-graph-copy h2,
+.reader-heading h2,
+.cleanup-dialog-card > h2,
+.memory-panel-heading h2,
+.focus-card h3,
+.memory-hero h2,
+.person-hero h2 {
+  font-family: var(--desk-font-display) !important;
 }
 
 .main-header::before,
@@ -218,7 +229,7 @@ summary:focus-visible,
 .nav-copy small,
 .brand-copy strong,
 .person-profile-card strong {
-  font-family: inherit;
+  font-family: var(--desk-font-ui);
   text-shadow: none;
 }
 
@@ -586,9 +597,8 @@ body[data-view="person"] .main-header h1 {
   margin: 0;
   color: var(--desk-ink);
   font-size: clamp(25px, 2.2vw, 33px);
-  font-weight: 690;
-  font-family: inherit;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  letter-spacing: -0.045em;
 }
 
 .main-subtitle {
@@ -869,7 +879,10 @@ body[data-view="overview"] .focus-card {
 .focus-card .focus-project h3 {
   margin: 0 0 5px;
   color: var(--desk-ink);
-  font: 680 18px/1.35 inherit;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
   text-shadow: none;
 }
 
@@ -1886,6 +1899,10 @@ body .sidebar .nav-item.is-active {
   text-shadow: none;
 }
 
+body .app-shell * {
+  font-family: var(--desk-font-ui) !important;
+}
+
 body .sidebar .nav-item.is-active {
   border: 1px solid #303637;
   background: #202426;
@@ -1902,15 +1919,70 @@ body .sidebar .nav-group-toggle:hover {
 body .nav-copy strong,
 body .nav-copy small,
 body .knowledge-card h3,
-body .memory-hero h2,
-body .person-hero h2,
 body .memory-project-card h3,
 body .memory-attention-card h3,
 body .pipeline-row h3,
 body .health-card strong,
 body .person-profile-card strong {
-  font-family: inherit;
+  font-family: var(--desk-font-ui);
   text-shadow: none;
+}
+
+body .main-header h1,
+body .section-heading h2,
+body .atlas-toolbar h2,
+body .context-header h2,
+body .person-graph-copy h2,
+body .reader-heading h2,
+body .cleanup-dialog-card > h2,
+body .memory-panel-heading h2,
+body .focus-card h3,
+body .memory-hero h2,
+body .person-hero h2 {
+  font-family: var(--desk-font-display) !important;
+  font-weight: 700;
+  font-synthesis: none;
+}
+
+body .brand-copy strong,
+body .brand-copy span,
+body .status-title,
+body .vault-status strong,
+body .filter-pill,
+body .filter-more-toggle,
+body .filter-more-menu,
+body .memory-tabs button,
+body .person-tabs button,
+body .person-action,
+body .reader-action,
+body .quick-note-launcher,
+body .action-more > summary,
+body .card-type,
+body .visibility-chip,
+body .focus-labels span,
+body .focus-labels i,
+body .context-back-button {
+  font-family: var(--desk-font-ui) !important;
+  font-synthesis: none;
+}
+
+body .nav-number,
+body .shortcut,
+body .pipeline-row::after,
+body code,
+body pre,
+body kbd {
+  font-family: var(--desk-font-mono) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+body time,
+body .memory-hero-stats strong,
+body .person-stat-grid strong,
+body .atlas-stats strong,
+body .person-graph-stats strong {
+  font-family: var(--desk-font-ui);
+  font-variant-numeric: tabular-nums;
 }
 
 body .nav-copy strong,

@@ -74,6 +74,7 @@ class ProductContracts(unittest.TestCase):
         html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
         source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
         polish = (UI_ROOT / "polish.css").read_text(encoding="utf-8-sig")
+        quick_note_styles = (UI_ROOT / "quick-note-window.css").read_text(encoding="utf-8-sig")
         expected_entries = (
             ('data-view="overview"', 'aria-label="总览"'),
             ('data-view="memory"', 'aria-label="Bok 工作台"'),
@@ -93,8 +94,11 @@ class ProductContracts(unittest.TestCase):
             self.assertIn(f'data-scope="{scope}"', html)
         self.assertIn('view: "overview"', source)
         self.assertNotIn("legacy-nav-routes", html)
-        self.assertIn('href="./polish.css?v=20260830-1"', html)
+        self.assertIn('href="./polish.css?v=20260830-2"', html)
         self.assertIn("UI-only visual layer", polish)
+        self.assertIn('--desk-font-display: "Songti SC"', polish)
+        self.assertNotIn('"Fusion Pixel"', source)
+        self.assertNotIn('"Fusion Pixel"', quick_note_styles)
 
     def test_cross_platform_launchers_have_safe_dependency_paths(self) -> None:
         macos_source = (UI_ROOT / "open-preview.command").read_text(encoding="utf-8-sig")

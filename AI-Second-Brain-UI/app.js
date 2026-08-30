@@ -1855,7 +1855,7 @@ function drawPersonGraph() {
       context.fillStyle = "white";
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.font = node.kind === "self" ? '22px "Fusion Pixel", sans-serif' : '10px "Microsoft YaHei UI", sans-serif';
+      context.font = node.kind === "self" ? '700 22px "Songti SC", "STSong", serif' : '500 10px "Avenir Next", "PingFang SC", sans-serif';
       const label = node.kind === "self" ? node.label : node.label.slice(0, 5);
       context.fillText(label, 0, node.kind === "self" ? -4 : 0);
     } else {

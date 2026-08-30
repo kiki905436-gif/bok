@@ -686,13 +686,18 @@ for (const target of pageTargets) {
       activeNavCount: document.querySelectorAll('#navList .nav-item.is-active').length,
       activeNavView: document.querySelector('#navList .nav-item.is-active')?.dataset.view || '',
       activeNavFilter: getComputedStyle(document.querySelector('#navList .nav-item.is-active')).filter,
+      legacyPixelFonts: [...view.querySelectorAll('*')].filter((node) => {
+        const style = getComputedStyle(node);
+        const nodeRect = node.getBoundingClientRect();
+        return nodeRect.width > 0 && nodeRect.height > 0 && style.visibility !== 'hidden' && style.fontFamily.includes('Fusion Pixel');
+      }).map((node) => node.id ? '#' + node.id : node.className ? '.' + String(node.className).trim().replaceAll(' ', '.') : node.tagName).slice(0, 20),
       unwantedTitleDecoration: [...document.querySelectorAll('#${target.id} .atlas-toolbar > div:first-child, #${target.id} .person-graph-copy h2')].some((node) => {
         const content = getComputedStyle(node, '::after').content;
         return content && content !== 'none' && content !== 'normal';
       }),
     };
   })()`);
-  if (audit.view !== target.view || audit.hidden || audit.width < 200 || audit.height < 100 || audit.textLength < 2 || audit.viewportOverflow || audit.activeNavCount !== 1 || audit.activeNavView !== target.view || audit.activeNavFilter !== 'none' || audit.unwantedTitleDecoration) {
+  if (audit.view !== target.view || audit.hidden || audit.width < 200 || audit.height < 100 || audit.textLength < 2 || audit.viewportOverflow || audit.activeNavCount !== 1 || audit.activeNavView !== target.view || audit.activeNavFilter !== 'none' || audit.legacyPixelFonts.length || audit.unwantedTitleDecoration) {
     throw new Error(`Desktop page audit failed for ${target.view}/${target.scope}: ${JSON.stringify(audit)}`);
   }
   pageAudits.push({ ...target, desktop: audit });
