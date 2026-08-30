@@ -112,6 +112,10 @@
 
 `source_refs` 可选；场景发现已经选出会话时应显式传入，保证提炼使用同一证据集。省略时才在项目边界内按 `query` 检索。提炼过程不会自动把结果标为已验证：存在缺口或冲突时状态为 `needs_evidence`，否则为 `draft`。真实业务执行和回读验收是进入 `validated` 的必要条件。
 
+CLI 额外提供 `bok operations compile` 批量编排入口：它过滤临时目录和容器目录，以项目为单位发现多个场景，逐场景提炼，生成项目 `Project.md` 索引，并在 `.bok/state/operational-batches/` 保存可续跑状态。可用 `--project` 限定项目、`--max-scenarios` 控制每项目场景数、`--dry-run` 只检查项目范围。已存在的闭环默认跳过，`--force` 才重新提炼。
+
+首选提取模型受额度、限流或模型可用性阻断时，Bok 自动尝试配置的后备模型；错误收据只记录模型、失败原因和退出码，不回显包含源会话的 CLI 输入。
+
 ### `POST /operations/loop`
 
 读取一个已编译闭环，供 Codex、Claude 等 Agent 获取步骤、决策、工具绑定、验证门、缺口和来源引用。

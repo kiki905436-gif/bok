@@ -470,12 +470,36 @@ OPERATIONAL_LOOP_SCHEMA = {
 
 
 class CodexCliRunner:
-    def __init__(self, model: str = "gpt-5.3-codex-spark", executable: str = "codex"):
-        self.model = str(model or "gpt-5.3-codex-spark")
+    def __init__(
+        self,
+        model: str = "gpt-5.3-codex-spark",
+        executable: str = "codex",
+        fallback_models: Optional[Iterable[str]] = None,
+    ):
+        candidates = [str(model or "gpt-5.3-codex-spark")]
+        candidates.extend(str(item) for item in (fallback_models or ()) if str(item))
+        self.models = tuple(dict.fromkeys(candidates))
+        self.model = self.models[0]
         self.executable = executable
 
+    @staticmethod
+    def _failure_reason(stderr: str) -> tuple[str, bool]:
+        folded = str(stderr or "").casefold()
+        if "usage limit" in folded or "quota" in folded or "insufficient_quota" in folded:
+            return "usage_limit", True
+        if "rate limit" in folded or "too many requests" in folded:
+            return "rate_limit", True
+        if "model" in folded and any(marker in folded for marker in ("not found", "unavailable", "unsupported", "does not exist")):
+            return "model_unavailable", True
+        if "timeout" in folded or "timed out" in folded:
+            return "timeout", True
+        return "cli_failed", False
+
+    def _prefer(self, model: str) -> None:
+        self.model = model
+
     def generate(self, *, system: str, payload: dict, schema: dict, cwd: str, images: Optional[List[dict]] = None) -> dict:
-        if not MODEL_NAME_PATTERN.fullmatch(self.model):
+        if any(not MODEL_NAME_PATTERN.fullmatch(model) for model in self.models):
             raise BokError("invalid_extraction_model", "Extraction model name is invalid")
         executable = shutil.which(self.executable)
         if not executable:
@@ -494,34 +518,65 @@ class CodexCliRunner:
                 image_path = Path(temporary) / f"evidence-{index}{IMAGE_EXTENSIONS[mime_type]}"
                 image_path.write_bytes(data)
                 image_paths.append(image_path)
-            command = [
-                executable, "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-                "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never",
-                "--model", self.model,
-            ]
-            if image_paths:
-                command.extend(["--image", *(str(path) for path in image_paths)])
-            command.extend(["--output-schema", str(schema_path), "--output-last-message", str(output_path), "-C", cwd, "-"])
-            try:
-                completed = subprocess.run(
-                    command,
-                    input=prompt,
-                    text=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    timeout=300,
-                    env=os.environ.copy(),
-                    check=False,
-                )
-            except subprocess.TimeoutExpired as error:
-                raise BokError("codex_extraction_timeout", "Codex CLI extraction timed out", status=504) from error
-            if completed.returncode != 0 or not output_path.is_file():
-                detail = _redact((completed.stderr or "")[-1200:])
-                raise BokError("codex_extraction_failed", "Codex CLI extraction failed", status=502, details={"exit_code": completed.returncode, "detail": detail})
-            try:
-                result = json.loads(output_path.read_text(encoding="utf-8"))
-            except (OSError, ValueError) as error:
-                raise BokError("codex_extraction_invalid", "Codex CLI returned invalid structured output", status=502) from error
+            attempts = []
+            result = None
+            attempt_models = (self.model, *(item for item in self.models if item != self.model))
+            for index, model in enumerate(attempt_models):
+                output_path.unlink(missing_ok=True)
+                command = [
+                    executable, "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
+                    "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never",
+                    "--model", model,
+                ]
+                if image_paths:
+                    command.extend(["--image", *(str(path) for path in image_paths)])
+                command.extend(["--output-schema", str(schema_path), "--output-last-message", str(output_path), "-C", cwd, "-"])
+                try:
+                    completed = subprocess.run(
+                        command,
+                        input=prompt,
+                        text=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        timeout=300,
+                        env=os.environ.copy(),
+                        check=False,
+                    )
+                except subprocess.TimeoutExpired:
+                    attempts.append({"model": model, "reason": "timeout"})
+                    if index + 1 < len(attempt_models):
+                        continue
+                    raise BokError(
+                        "codex_extraction_timeout",
+                        "Codex CLI extraction timed out",
+                        status=504,
+                        details={"attempts": attempts},
+                    )
+                if completed.returncode != 0 or not output_path.is_file():
+                    reason, retryable = self._failure_reason(completed.stderr or "")
+                    attempts.append({"model": model, "reason": reason, "exit_code": completed.returncode})
+                    if retryable and index + 1 < len(attempt_models):
+                        continue
+                    raise BokError(
+                        "codex_extraction_failed",
+                        "Codex CLI extraction failed",
+                        status=502,
+                        details={"attempts": attempts},
+                    )
+                try:
+                    result = json.loads(output_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    attempts.append({"model": model, "reason": "invalid_structured_output"})
+                    if index + 1 < len(attempt_models):
+                        continue
+                    raise BokError(
+                        "codex_extraction_invalid",
+                        "Codex CLI returned invalid structured output",
+                        status=502,
+                        details={"attempts": attempts},
+                    )
+                self._prefer(model)
+                break
         if not isinstance(result, dict):
             raise BokError("codex_extraction_invalid", "Codex CLI returned a non-object result", status=502)
         return result
@@ -539,11 +594,254 @@ class OperationalExperience:
         self.config = config
         self.storage = storage
         self.catalog = CodexSessionCatalog(config)
-        self.runner = runner or CodexCliRunner(config.operational_extraction_model)
-        self.synthesis_runner = synthesis_runner or (runner if runner is not None else CodexCliRunner(config.operational_synthesis_model))
+        self.runner = runner or CodexCliRunner(
+            config.operational_extraction_model,
+            fallback_models=config.operational_extraction_fallback_models,
+        )
+        self.synthesis_runner = synthesis_runner or (
+            runner
+            if runner is not None
+            else CodexCliRunner(
+                config.operational_synthesis_model,
+                fallback_models=config.operational_synthesis_fallback_models,
+            )
+        )
 
     def projects(self, *, limit: int = 200) -> dict:
         return self.catalog.projects(limit=limit)
+
+    @staticmethod
+    def _project_eligibility(context: dict, *, include_non_git: bool = False) -> tuple[bool, str]:
+        root = Path(str(context.get("root", ""))).expanduser().resolve(strict=False)
+        home = Path.home().resolve()
+        if not root.is_dir():
+            return False, "missing_root"
+        if root in {home, home / "projects", home / "Desktop" / "projects"}:
+            return False, "container_root"
+        if any(part in {"tmp", "private", "var", "codex-work"} for part in root.parts):
+            return False, "temporary_root"
+        if root.name.casefold() in {"projects", "project", "tmp", "codex-work", home.name.casefold()}:
+            return False, "generic_root"
+        if (root / ".git").exists() or root.parent == home / "projects":
+            return True, "project_root"
+        if include_non_git:
+            return True, "explicit_non_git"
+        return False, "not_a_project_root"
+
+    def batch_projects(
+        self,
+        *,
+        selectors: Optional[List[str]] = None,
+        min_sessions: int = 2,
+        max_projects: int = 20,
+        include_non_git: bool = False,
+    ) -> dict:
+        explicit = bool(selectors)
+        if selectors:
+            contexts = [self.catalog.resolve_project(item) for item in dict.fromkeys(selectors)]
+        else:
+            contexts = self.projects(limit=1000)["items"]
+        selected = []
+        skipped = []
+        for context in contexts:
+            if explicit:
+                eligible, reason = Path(str(context.get("root", ""))).is_dir(), "explicit"
+            else:
+                eligible, reason = self._project_eligibility(context, include_non_git=include_non_git)
+            if int(context.get("session_count", 0)) < max(1, int(min_sessions)):
+                eligible, reason = False, "insufficient_sessions"
+            item = dict(context)
+            item["eligibility"] = reason
+            (selected if eligible else skipped).append(item)
+        selected = selected[: max(1, min(int(max_projects), 200))]
+        return {"items": selected, "skipped": skipped, "total": len(selected)}
+
+    @staticmethod
+    def _project_document_path(project_id: str) -> str:
+        return f"{OPERATIONAL_ROOT}/{slugify(project_id, 'project')}/Project.md"
+
+    def _write_project_document(self, context: dict, scenarios: List[dict]) -> dict:
+        path = self._project_document_path(context["project_id"])
+        existing_hash = self.storage.content_hash(path)
+        created_at = ""
+        if existing_hash:
+            existing_frontmatter, _ = parse_frontmatter(self.storage.read_text(path))
+            created_at = str(existing_frontmatter.get("created", ""))
+        now = utc_now()
+        materialized = [item for item in scenarios if item.get("path")]
+        source_refs = sorted({str(ref) for item in scenarios for ref in item.get("source_refs", []) if str(ref)})
+        frontmatter = render_frontmatter({
+            "id": f"project-context-{sha256_text(context['project_id'])[:16]}",
+            "type": "project-context",
+            "role": "agent-runtime",
+            "status": "active",
+            "project_id": context["project_id"],
+            "project_name": context["name"],
+            "source": "codex-conversations",
+            "source_sessions": source_refs,
+            "scenario_count": len(scenarios),
+            "materialized_scenario_count": len(materialized),
+            "created": created_at or now,
+            "updated": now,
+            "tags": ["project-context", context["name"]],
+        })
+        rows = []
+        for item in scenarios:
+            title = _redact(str(item.get("title") or item.get("scenario_id") or "未命名场景"))
+            outcome = _redact(str(item.get("business_outcome") or "—"))
+            status = str(item.get("status") or ("candidate" if not item.get("error") else "failed"))
+            target = str(item.get("path") or "")
+            link = f"[[{target.removesuffix('.md')}|{title}]]" if target else title
+            rows.append(f"- {link} · `{status}`\n  - 业务结果：{outcome}")
+        body = (
+            f"# {context['name']} 项目上下文\n\n"
+            "## 基线\n\n"
+            f"- 项目根目录：`{context['root']}`\n"
+            f"- 已识别源会话：{context['session_count']}\n"
+            f"- 已发现业务场景：{len(scenarios)}\n"
+            f"- 已生成可执行闭环：{len(materialized)}\n\n"
+            "## 业务场景\n\n"
+            + ("\n".join(rows) if rows else "- 尚未发现有足够证据的业务场景。")
+            + "\n"
+        )
+        write = self.storage.write(
+            path,
+            frontmatter + body,
+            expected_hash=existing_hash,
+            operation="project_context_update" if existing_hash else "project_context_create",
+            metadata={"project_id": context["project_id"], "scenario_count": len(scenarios)},
+        )
+        return {"path": path, "content_hash": write.content_hash}
+
+    def compile_batch(
+        self,
+        *,
+        selectors: Optional[List[str]] = None,
+        min_sessions: int = 2,
+        max_projects: int = 20,
+        max_scenarios: int = 4,
+        max_sessions: int = 8,
+        discovery_limit: int = 80,
+        include_non_git: bool = False,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> dict:
+        project_result = self.batch_projects(
+            selectors=selectors,
+            min_sessions=min_sessions,
+            max_projects=max_projects,
+            include_non_git=include_non_git,
+        )
+        if dry_run:
+            return {"status": "dry_run", **project_result}
+        options = {
+            "projects": [item["project_id"] for item in project_result["items"]],
+            "max_scenarios": max(1, min(int(max_scenarios), 24)),
+            "max_sessions": max(1, min(int(max_sessions), 20)),
+            "discovery_limit": max(1, min(int(discovery_limit), 100)),
+        }
+        batch_id = sha256_text(canonical_json(options))[:16]
+        state_path = self.config.state_dir / "state" / "operational-batches" / f"{batch_id}.json"
+        state = read_json(state_path, {})
+        if not isinstance(state, dict) or state.get("batch_id") != batch_id:
+            state = {
+                "batch_id": batch_id,
+                "status": "running",
+                "started_at": utc_now(),
+                "options": options,
+                "projects": {},
+            }
+
+        def persist() -> None:
+            state["updated_at"] = utc_now()
+            atomic_write_json(state_path, state)
+
+        persist()
+        completed = 0
+        existing = 0
+        failures = 0
+        project_outputs = []
+        for context in project_result["items"]:
+            project_id = context["project_id"]
+            project_state = state["projects"].setdefault(project_id, {
+                "project": context,
+                "status": "discovering",
+                "scenarios": [],
+            })
+            scenarios = project_state.get("scenarios") if isinstance(project_state.get("scenarios"), list) else []
+            if not scenarios:
+                try:
+                    discovery = self.discover(project_id, limit=options["discovery_limit"])
+                    scenarios = [dict(item) for item in discovery.get("scenarios", [])[: options["max_scenarios"]]]
+                    project_state["discovery_model"] = discovery.get("model", self.runner.model)
+                    project_state["source_session_count"] = discovery.get("source_session_count", 0)
+                    project_state["scenarios"] = scenarios
+                    project_state["status"] = "extracting"
+                except BokError as error:
+                    failures += 1
+                    project_state["status"] = "failed"
+                    project_state["error"] = error.as_dict()["error"]
+                    persist()
+                    project_outputs.append({"project": context, "status": "failed", "error": project_state["error"]})
+                    continue
+                persist()
+            for scenario in scenarios:
+                scenario_title = str(scenario.get("title") or scenario.get("scenario_id") or "").strip()
+                expected_path = self._scenario_path(project_id, slugify(scenario_title, "scenario"))
+                if not force and scenario.get("status") in {"draft", "needs_evidence", "existing"} and self.storage.content_hash(str(scenario.get("path") or expected_path)):
+                    existing += 1
+                    continue
+                if not force and self.storage.content_hash(expected_path):
+                    scenario.update({"status": "existing", "path": expected_path})
+                    existing += 1
+                    persist()
+                    continue
+                try:
+                    query = " ".join([scenario_title, *[str(item) for item in scenario.get("keywords", [])]])[:1000]
+                    result = self.extract(
+                        project_id,
+                        scenario_title,
+                        query=query,
+                        max_sessions=options["max_sessions"],
+                        source_refs=scenario.get("source_refs"),
+                    )
+                    scenario.update({
+                        "status": result["status"],
+                        "path": result["path"],
+                        "steps": result["steps"],
+                        "models": result["models"],
+                    })
+                    scenario.pop("error", None)
+                    completed += 1
+                except BokError as error:
+                    scenario["status"] = "failed"
+                    scenario["error"] = error.as_dict()["error"]
+                    failures += 1
+                persist()
+            project_state["status"] = "completed" if all(item.get("status") != "failed" for item in scenarios) else "completed_with_errors"
+            project_state["document"] = self._write_project_document(context, scenarios)
+            persist()
+            project_outputs.append({
+                "project": context,
+                "status": project_state["status"],
+                "document": project_state["document"],
+                "scenarios": scenarios,
+            })
+        state["status"] = "completed_with_errors" if failures else "completed"
+        persist()
+        return {
+            "batch_id": batch_id,
+            "status": state["status"],
+            "projects": project_outputs,
+            "skipped_projects": project_result["skipped"],
+            "counts": {
+                "projects": len(project_outputs),
+                "created_or_updated": completed,
+                "existing": existing,
+                "failed": failures,
+            },
+            "state_path": str(state_path),
+        }
 
     def sources(self, project: str, *, query: str = "", limit: int = 20) -> dict:
         return self.catalog.sources(project, query=query, limit=limit, include_messages=False)
@@ -604,7 +902,7 @@ class OperationalExperience:
             "images": [item["image_ref"] for item in record.image_inputs],
             "scenario": scenario,
             "query": query,
-            "model": self.runner.model,
+            "models": list(getattr(self.runner, "models", (self.runner.model,))),
         }))
         return self.config.state_dir / "state" / "operational-evidence" / f"{fingerprint}.json"
 
@@ -612,7 +910,13 @@ class OperationalExperience:
         cache = self._evidence_cache(record, scenario, query)
         cached = read_json(cache, {})
         if isinstance(cached, dict) and cached.get("source_ref") == record.source_ref:
-            return cached
+            if isinstance(cached.get("result"), dict):
+                result = dict(cached["result"])
+                result["_bok_model"] = str(cached.get("model") or self.runner.model)
+                return result
+            legacy = dict(cached)
+            legacy["_bok_model"] = str(cached.get("_bok_model") or self.runner.model)
+            return legacy
         extracted = self.runner.generate(
             system=(
                 "Extract evidence for one business scenario from exactly one Codex conversation. "
@@ -628,7 +932,12 @@ class OperationalExperience:
         )
         if extracted.get("source_ref") != record.source_ref:
             extracted["source_ref"] = record.source_ref
-        atomic_write_json(cache, extracted)
+        extracted["_bok_model"] = self.runner.model
+        atomic_write_json(cache, {
+            "source_ref": record.source_ref,
+            "model": self.runner.model,
+            "result": extracted,
+        })
         return extracted
 
     @staticmethod
@@ -701,6 +1010,7 @@ class OperationalExperience:
             if record is None:
                 continue
             evidence.append(self._extract_session_evidence(record, scenario_title, retrieval_query, context["root"]))
+        evidence_models = sorted({str(item.get("_bok_model") or self.runner.model) for item in evidence})
         allowed_refs = {item["source_ref"] for item in evidence}
         loop = self.synthesis_runner.generate(
             system=(
@@ -765,7 +1075,7 @@ class OperationalExperience:
         fingerprint = sha256_text(canonical_json({
             "schema_version": OPERATIONAL_SCHEMA_VERSION,
             "project": context["project_id"], "scenario": scenario_title, "query": retrieval_query,
-            "sources": source_refs, "evidence_model": self.runner.model, "synthesis_model": self.synthesis_runner.model,
+            "sources": source_refs, "evidence_models": evidence_models, "synthesis_model": self.synthesis_runner.model,
         }))
         path = self._scenario_path(context["project_id"], scenario_id)
         existing_hash = self.storage.content_hash(path)
@@ -780,6 +1090,7 @@ class OperationalExperience:
             source_refs=source_refs,
             fingerprint=fingerprint,
             loop=loop,
+            evidence_models=evidence_models,
             created_at=created_at,
         )
         write = self.storage.write(
@@ -800,7 +1111,7 @@ class OperationalExperience:
             "steps": len(steps),
             "gaps": gaps,
             "contradictions": contradictions,
-            "models": {"evidence": self.runner.model, "synthesis": self.synthesis_runner.model},
+            "models": {"evidence": evidence_models, "synthesis": self.synthesis_runner.model},
             "content_hash": write.content_hash,
         }
 
@@ -836,7 +1147,18 @@ class OperationalExperience:
             items.append(f"- {_redact(str(item['statement']).strip())}{suffix}")
         return "\n".join(items) if items else "- —"
 
-    def _render_loop(self, *, context: dict, scenario_id: str, status: str, source_refs: List[str], fingerprint: str, loop: dict, created_at: str = "") -> str:
+    def _render_loop(
+        self,
+        *,
+        context: dict,
+        scenario_id: str,
+        status: str,
+        source_refs: List[str],
+        fingerprint: str,
+        loop: dict,
+        evidence_models: Optional[List[str]] = None,
+        created_at: str = "",
+    ) -> str:
         now = utc_now()
         frontmatter = render_frontmatter({
             "id": f"loop-{sha256_text(context['project_id'] + ':' + scenario_id)[:16]}",
@@ -849,7 +1171,11 @@ class OperationalExperience:
             "source": "codex-conversations",
             "source_sessions": source_refs,
             "input_fingerprint": fingerprint,
-            "model_evidence": self.runner.model,
+            "model_evidence": (
+                (evidence_models or [self.runner.model])[0]
+                if len(evidence_models or [self.runner.model]) == 1
+                else list(evidence_models or [self.runner.model])
+            ),
             "model_synthesis": self.synthesis_runner.model,
             "schema_version": OPERATIONAL_SCHEMA_VERSION,
             "updated": now,

@@ -83,6 +83,16 @@ def parser() -> argparse.ArgumentParser:
     operation_extract.add_argument("--query", default="")
     operation_extract.add_argument("--max-sessions", type=int, default=8)
     operation_extract.add_argument("--source-ref", action="append")
+    operation_compile = operation_commands.add_parser("compile", help="Discover and compile multiple project scenarios with resumable progress")
+    operation_compile.add_argument("--project", action="append", dest="projects")
+    operation_compile.add_argument("--min-sessions", type=int, default=2)
+    operation_compile.add_argument("--max-projects", type=int, default=20)
+    operation_compile.add_argument("--max-scenarios", type=int, default=4)
+    operation_compile.add_argument("--max-sessions", type=int, default=8)
+    operation_compile.add_argument("--discovery-limit", type=int, default=80)
+    operation_compile.add_argument("--include-non-git", action="store_true")
+    operation_compile.add_argument("--force", action="store_true")
+    operation_compile.add_argument("--dry-run", action="store_true")
     operation_get = operation_commands.add_parser("get")
     operation_get.add_argument("project")
     operation_get.add_argument("scenario")
@@ -328,6 +338,18 @@ def _run_operations(service: BokService, arguments) -> dict:
             query=arguments.query,
             max_sessions=arguments.max_sessions,
             source_refs=arguments.source_ref,
+        )
+    if command == "compile":
+        return service.compile_operational_loops(
+            selectors=arguments.projects,
+            min_sessions=arguments.min_sessions,
+            max_projects=arguments.max_projects,
+            max_scenarios=arguments.max_scenarios,
+            max_sessions=arguments.max_sessions,
+            discovery_limit=arguments.discovery_limit,
+            include_non_git=arguments.include_non_git,
+            force=arguments.force,
+            dry_run=arguments.dry_run,
         )
     if command == "get":
         return service.operational_loop(arguments.project, arguments.scenario)

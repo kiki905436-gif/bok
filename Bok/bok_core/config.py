@@ -59,6 +59,9 @@ DEFAULT_CODEX_SESSION_ROOTS = (
     str(Path.home() / ".codex" / "archived_sessions"),
 )
 
+DEFAULT_OPERATIONAL_EXTRACTION_FALLBACK_MODELS = ("gpt-5.6-luna",)
+DEFAULT_OPERATIONAL_SYNTHESIS_FALLBACK_MODELS = ("gpt-5.6-luna",)
+
 
 @dataclass
 class BokConfig:
@@ -83,6 +86,12 @@ class BokConfig:
     codex_session_roots: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_CODEX_SESSION_ROOTS)
     operational_extraction_model: str = "gpt-5.3-codex-spark"
     operational_synthesis_model: str = "gpt-5.5"
+    operational_extraction_fallback_models: Tuple[str, ...] = field(
+        default_factory=lambda: DEFAULT_OPERATIONAL_EXTRACTION_FALLBACK_MODELS
+    )
+    operational_synthesis_fallback_models: Tuple[str, ...] = field(
+        default_factory=lambda: DEFAULT_OPERATIONAL_SYNTHESIS_FALLBACK_MODELS
+    )
     allowed_write_roots: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_WRITE_ROOTS)
     ignored_dirs: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_IGNORED_DIRS)
     important_memory_types: Tuple[str, ...] = (
@@ -186,6 +195,8 @@ class BokConfig:
             "codex_session_roots",
             "operational_extraction_model",
             "operational_synthesis_model",
+            "operational_extraction_fallback_models",
+            "operational_synthesis_fallback_models",
             "allowed_write_roots",
             "ignored_dirs",
             "important_memory_types",
@@ -201,6 +212,8 @@ class BokConfig:
             "auto_commit_memory_types",
             "deferred_search_prefixes",
             "codex_session_roots",
+            "operational_extraction_fallback_models",
+            "operational_synthesis_fallback_models",
         ):
             if key in values:
                 values[key] = tuple(str(item) for item in values[key])
@@ -227,6 +240,8 @@ class BokConfig:
             "codex_session_roots": [Path(value).expanduser().name for value in self.codex_session_roots],
             "operational_extraction_model": self.operational_extraction_model,
             "operational_synthesis_model": self.operational_synthesis_model,
+            "operational_extraction_fallback_models": list(self.operational_extraction_fallback_models),
+            "operational_synthesis_fallback_models": list(self.operational_synthesis_fallback_models),
             "auto_start_local_model": self.auto_start_local_model,
             "allowed_write_roots": list(self.allowed_write_roots),
         }
