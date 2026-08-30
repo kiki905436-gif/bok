@@ -35,3 +35,11 @@ _Avoid_: HTTP 200、看起来正常
 **Agent Task Pack（Agent 任务包）**:
 从项目上下文和业务场景中编译出的最小执行子图，包含目标、当前状态、适用动作、限制和验证门。
 _Avoid_: 搜索结果、整库上下文
+
+**Ontology Projection（本体投影）**:
+由 Project Context、Operational Loop 及其来源引用重建的可丢弃系统视图，服务于目录、检索和知识图谱，但不替代 Markdown 事实源。
+_Avoid_: 知识卡集合、标签关系图、第二事实源
+
+**Ontology Publication（本体发布）**:
+一个闭环写入后，同步完成项目基线、全局目录、检索索引和本体投影重建并通过一致性回读的完成边界。
+_Avoid_: 单文件生成、索引失效、稍后刷新

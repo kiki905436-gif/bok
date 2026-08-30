@@ -260,6 +260,31 @@ class ProductContracts(unittest.TestCase):
             self.opener.open(request, timeout=10)
         self.assertEqual(caught.exception.code, 304)
 
+    def test_operational_ontology_projection_replaces_tag_patched_graph(self) -> None:
+        source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
+        self.assertIn("buildOntologyAtlas", source)
+        self.assertIn('"verification-gate": "验证门"', source)
+        self.assertIn("payload.ontologyGraph", source)
+        self.assertNotIn("标签补边", source)
+        with tempfile.TemporaryDirectory() as vault_directory:
+            vault = Path(vault_directory).resolve()
+            (vault / "06-Business").mkdir(parents=True)
+            (vault / "06-Business/Operational-Ontology.md").write_text("# FDE 业务本体\n", encoding="utf-8")
+            projection_path = vault / ".bok/state/operational-ontology/projection.json"
+            projection_path.parent.mkdir(parents=True)
+            projection_path.write_text(json.dumps({
+                "schema_version": 1,
+                "canonical_fingerprint": "abc",
+                "canonical_documents": ["06-Business/Operational-Ontology.md"],
+                "nodes": [{"id": "ontology:operational", "kind": "ontology", "label": "FDE 业务本体", "path": "06-Business/Operational-Ontology.md"}],
+                "edges": [],
+            }), encoding="utf-8")
+            with patch.object(self.preview, "VAULT_ROOT", vault):
+                _, raw_payload = self.preview.VaultCache().read()
+        payload = json.loads(raw_payload)
+        self.assertEqual(payload["ontologyGraph"]["canonical_fingerprint"], "abc")
+        self.assertEqual(payload["ontologyGraph"]["nodes"][0]["kind"], "ontology")
+
     def test_vault_selection_is_persisted_and_loaded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

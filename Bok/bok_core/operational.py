@@ -11,11 +11,12 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from .config import BokConfig
 from .errors import BokError, NotFoundError
 from .markdown import parse_frontmatter, render_frontmatter
+from .ontology import OperationalOntologyProjector
 from .storage import VaultStorage
 from .util import atomic_write_json, canonical_json, read_json, sha256_text, slugify, utc_now
 
@@ -590,6 +591,7 @@ class OperationalExperience:
         *,
         runner: Optional[CodexCliRunner] = None,
         synthesis_runner: Optional[CodexCliRunner] = None,
+        index_refresher: Optional[Callable[[bool], dict]] = None,
     ):
         self.config = config
         self.storage = storage
@@ -606,6 +608,8 @@ class OperationalExperience:
                 fallback_models=config.operational_synthesis_fallback_models,
             )
         )
+        self.projector = OperationalOntologyProjector(config, storage)
+        self.index_refresher = index_refresher
 
     def projects(self, *, limit: int = 200) -> dict:
         return self.catalog.projects(limit=limit)
@@ -660,6 +664,34 @@ class OperationalExperience:
     def _project_document_path(project_id: str) -> str:
         return f"{OPERATIONAL_ROOT}/{slugify(project_id, 'project')}/Project.md"
 
+    def _materialized_scenarios(self, project_id: str) -> List[dict]:
+        directory = self.config.vault_root / OPERATIONAL_ROOT / slugify(project_id, "project") / "Scenarios"
+        scenarios = []
+        if not directory.is_dir():
+            return scenarios
+        for path in sorted(directory.glob("*.md")):
+            try:
+                text = path.read_text(encoding="utf-8-sig", errors="replace")
+            except OSError:
+                continue
+            frontmatter, body = parse_frontmatter(text)
+            if frontmatter.get("type") != "operational-loop" or str(frontmatter.get("project_id")) != project_id:
+                continue
+            title_match = re.search(r"(?m)^#\s+(.+?)\s*$", body)
+            outcome_match = re.search(r"(?ms)^##\s+业务结果\s*$\n(.*?)(?=^##\s+|\Z)", body)
+            outcome = ""
+            if outcome_match:
+                outcome = re.split(r"(?m)^来源：", outcome_match.group(1), maxsplit=1)[0].strip()
+            scenarios.append({
+                "scenario_id": str(frontmatter.get("scenario_id") or path.stem),
+                "title": title_match.group(1).strip() if title_match else path.stem,
+                "business_outcome": outcome or "—",
+                "status": str(frontmatter.get("status") or "draft"),
+                "path": self.storage.relative(path),
+                "source_refs": [str(item) for item in frontmatter.get("source_sessions", [])] if isinstance(frontmatter.get("source_sessions"), list) else [],
+            })
+        return scenarios
+
     def _write_project_document(self, context: dict, scenarios: List[dict]) -> dict:
         path = self._project_document_path(context["project_id"])
         existing_hash = self.storage.content_hash(path)
@@ -712,6 +744,55 @@ class OperationalExperience:
             metadata={"project_id": context["project_id"], "scenario_count": len(scenarios)},
         )
         return {"path": path, "content_hash": write.content_hash}
+
+    def publish_ontology(self, *, context: Optional[dict] = None, purge_legacy: bool = False) -> dict:
+        project_documents = {}
+        if context is not None:
+            project_id = str(context["project_id"])
+            project_documents[project_id] = self._write_project_document(
+                context,
+                self._materialized_scenarios(project_id),
+            )
+        else:
+            contexts = {str(item["project_id"]): item for item in self.projects(limit=1000)["items"]}
+            projects_root = self.config.vault_root / OPERATIONAL_ROOT
+            if projects_root.is_dir():
+                for directory in sorted(projects_root.iterdir()):
+                    if not directory.is_dir() or not (directory / "Scenarios").is_dir():
+                        continue
+                    project_id = directory.name
+                    scenarios = self._materialized_scenarios(project_id)
+                    if not scenarios:
+                        continue
+                    resolved = contexts.get(project_id)
+                    if resolved is None:
+                        project_path = self._project_document_path(project_id)
+                        frontmatter = {}
+                        body = ""
+                        if self.storage.content_hash(project_path):
+                            frontmatter, body = parse_frontmatter(self.storage.read_text(project_path))
+                        root_match = re.search(r"(?m)^-\s*项目根目录：`([^`]+)`", body)
+                        sessions_match = re.search(r"(?m)^-\s*已识别源会话：\s*(\d+)", body)
+                        resolved = {
+                            "project_id": project_id,
+                            "name": str(frontmatter.get("project_name") or project_id),
+                            "root": root_match.group(1) if root_match else "—",
+                            "session_count": int(sessions_match.group(1)) if sessions_match else 0,
+                        }
+                    project_documents[project_id] = self._write_project_document(resolved, scenarios)
+        projection = self.projector.rebuild(purge_legacy=purge_legacy)
+        if self.index_refresher is not None:
+            projection["search_index"] = self.index_refresher(purge_legacy)
+        else:
+            projection["search_index"] = {"status": "deferred"}
+        projection["projects"] = project_documents
+        return projection
+
+    def projection(self) -> dict:
+        return self.projector.read()
+
+    def rebuild(self, *, purge_legacy: bool = False) -> dict:
+        return self.publish_ontology(purge_legacy=purge_legacy)
 
     def compile_batch(
         self,
@@ -819,7 +900,9 @@ class OperationalExperience:
                     failures += 1
                 persist()
             project_state["status"] = "completed" if all(item.get("status") != "failed" for item in scenarios) else "completed_with_errors"
-            project_state["document"] = self._write_project_document(context, scenarios)
+            publication = self.publish_ontology(context=context)
+            project_state["document"] = publication["projects"][project_id]
+            project_state["publication"] = publication
             persist()
             project_outputs.append({
                 "project": context,
@@ -829,6 +912,7 @@ class OperationalExperience:
             })
         state["status"] = "completed_with_errors" if failures else "completed"
         persist()
+        publication = self.publish_ontology()
         return {
             "batch_id": batch_id,
             "status": state["status"],
@@ -841,6 +925,7 @@ class OperationalExperience:
                 "failed": failures,
             },
             "state_path": str(state_path),
+            "publication": publication,
         }
 
     def sources(self, project: str, *, query: str = "", limit: int = 20) -> dict:
@@ -1100,6 +1185,7 @@ class OperationalExperience:
             operation="operational_loop_update" if existing_hash else "operational_loop_create",
             metadata={"project_id": context["project_id"], "scenario_id": scenario_id, "source_session_count": len(source_refs)},
         )
+        publication = self.publish_ontology(context=context)
         return {
             "project": context,
             "scenario_id": scenario_id,
@@ -1113,6 +1199,7 @@ class OperationalExperience:
             "contradictions": contradictions,
             "models": {"evidence": evidence_models, "synthesis": self.synthesis_runner.model},
             "content_hash": write.content_hash,
+            "publication": publication,
         }
 
     @staticmethod

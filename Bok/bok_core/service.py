@@ -33,7 +33,11 @@ class BokService:
         self.storage = VaultStorage(config)
         self.search_engine = VaultSearch(config, self.storage)
         self.memory = MemoryInbox(config, self.storage, self.search_engine)
-        self.operations = OperationalExperience(config, self.storage)
+        self.operations = OperationalExperience(
+            config,
+            self.storage,
+            index_refresher=self._rebuild_operational_search_index,
+        )
         self.conversations = ConversationLedger(config, self.memory)
         self.person = PersonalClaimStore(config)
         self.person_learning = PersonalLearningStore(config, self.person)
@@ -41,6 +45,14 @@ class BokService:
         self.agent_credentials = AgentCredentialStore(config.state_dir)
         self.provider = ProviderClient(config)
         self.credentials = CredentialStore(config)
+
+    def _operational_projection_summary(self) -> dict:
+        projection = self.operations.projection()
+        return {
+            key: projection.get(key)
+            for key in ("status", "schema_version", "generated_at", "canonical_fingerprint", "counts")
+            if key in projection
+        }
 
     def initialize(self) -> dict:
         self.storage.ensure_state()
@@ -59,6 +71,7 @@ class BokService:
         return {
             "initialized": True,
             "index": index,
+            "operational_ontology": self._operational_projection_summary(),
             "state_dir": str(self.config.state_dir),
             "restore_repair": restore_repair,
             "version_repair": version_repair,
@@ -97,6 +110,7 @@ class BokService:
             "local_only": self.config.local_only,
             "provider": self.provider.info(),
             "index": index,
+            "operational_ontology": self._operational_projection_summary(),
             "memory_inbox": self.memory.counts(),
             "conversation_ledger": self.conversations.counts(),
             "personal_core": self.person.health(),
@@ -137,6 +151,8 @@ class BokService:
                 "operations.scenarios.discover",
                 "operations.loop.extract",
                 "operations.loop.read",
+                "operations.ontology.read",
+                "operations.ontology.rebuild",
                 "quick-note.create",
                 "document.write",
                 "document.rollback",
@@ -350,15 +366,27 @@ class BokService:
         return self.operations.discover(project, limit=limit)
 
     def extract_operational_loop(self, project: str, scenario: str, *, query: str = "", max_sessions: int = 8, source_refs=None) -> dict:
-        result = self.operations.extract(project, scenario, query=query, max_sessions=max_sessions, source_refs=source_refs)
-        self.search_engine.invalidate()
-        return result
+        return self.operations.extract(project, scenario, query=query, max_sessions=max_sessions, source_refs=source_refs)
 
     def compile_operational_loops(self, **options) -> dict:
         result = self.operations.compile_batch(**options)
-        if not options.get("dry_run"):
-            self.search_engine.invalidate()
         return result
+
+    def _rebuild_operational_search_index(self, clear_embeddings: bool = False) -> dict:
+        if clear_embeddings:
+            self.search_engine.embedding_cache_path.unlink(missing_ok=True)
+        return {
+            "status": "rebuilt",
+            "default": self.search_engine.refresh(force=True, scope="default"),
+            "all": self.search_engine.refresh(force=True, scope="all"),
+            "embedding_cache_cleared": bool(clear_embeddings),
+        }
+
+    def operational_ontology(self) -> dict:
+        return self.operations.projection()
+
+    def rebuild_operational_ontology(self, *, purge_legacy: bool = False) -> dict:
+        return self.operations.rebuild(purge_legacy=purge_legacy)
 
     def operational_loop(self, project: str, scenario: str) -> dict:
         return self.operations.get(project, scenario)
