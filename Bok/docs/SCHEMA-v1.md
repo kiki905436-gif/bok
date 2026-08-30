@@ -17,8 +17,11 @@ Project Context → Business Scenario → Operational Loop → Operational Actio
 闭环文件位于：
 
 ```text
+06-Business/Projects/<project-id>/Project.md
 06-Business/Projects/<project-id>/Scenarios/<scenario-id>.md
 ```
+
+`Project.md` 是项目基线索引，记录项目上下文、源会话数量、发现的业务场景、已物化闭环数量和场景链接；单个闭环文件继续承载可执行流程和证据。批量提炼中断时，断点状态保存在 `.bok/state/operational-batches/`，它只用于续跑，不替代 Markdown 事实源。
 
 frontmatter 至少包含：
 
@@ -35,7 +38,9 @@ source: codex-conversations
 source_sessions:
   - codex-session:<session-id>
 input_fingerprint: <sha256>
-model_evidence: gpt-5.3-codex-spark
+model_evidence:
+  - gpt-5.3-codex-spark
+  - gpt-5.6-luna
 model_synthesis: gpt-5.5
 schema_version: 3
 created: 2026-08-30T00:00:00Z
@@ -46,6 +51,8 @@ updated: 2026-08-30T00:00:00Z
 正文必须明确业务结果、触发条件、适用范围、业务对象、前置条件、按顺序执行的动作、决策分支、失败恢复、验证门、交付物、证据缺口、冲突和来源会话。业务结果、触发条件和每一条清单项都要引用稳定的 `codex-session:<id>`；无来源的模型判断不能进入正式闭环。每个步骤还要标记 `stable` 或 `needs_current_policy`。历史会话中的发布、授权、权限和 Agent 协作规则若未证明仍然有效，只能标为 `needs_current_policy`，核对当前项目规则前 Agent 不得执行。
 
 提炼分成两层：低成本模型逐会话提取 Evidence Fragment，综合模型只基于这些带来源的片段编译 Operational Loop。自动提炼只能产生 `draft` 或 `needs_evidence`；只有经过真实执行和证据回读后才能成为 `validated`。
+
+默认优先使用 `gpt-5.3-codex-spark` 提取、`gpt-5.5` 综合；当模型额度、限流或可用性阻断时，允许降级到配置中的低成本后备模型。文件必须记录实际使用的模型，不能把降级结果冒充为首选模型输出。
 
 源会话中的 `input_image` 也属于 Evidence Fragment。Bok 最多为一次会话提取 4 张受支持图片，临时附给本机 Codex CLI；正式 Vault 和 Evidence Cache 只保存 `codex-image:<session-id>:<hash>` 引用及视觉结论，不复制原始 base64 图片。无法读取、超限或仅凭图片无法确认的内容必须进入证据缺口。
 

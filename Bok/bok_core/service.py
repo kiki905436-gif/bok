@@ -354,6 +354,12 @@ class BokService:
         self.search_engine.invalidate()
         return result
 
+    def compile_operational_loops(self, **options) -> dict:
+        result = self.operations.compile_batch(**options)
+        if not options.get("dry_run"):
+            self.search_engine.invalidate()
+        return result
+
     def operational_loop(self, project: str, scenario: str) -> dict:
         return self.operations.get(project, scenario)
 

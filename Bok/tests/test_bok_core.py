@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -14,7 +15,7 @@ from bok_core.api import BokAPIServer
 from bok_core.config import BokConfig
 from bok_core.errors import BokError, ConflictError, NotFoundError, PermissionDeniedError
 from bok_core.mcp import MCPServer
-from bok_core.operational import OperationalExperience
+from bok_core.operational import CodexCliRunner, OperationalExperience
 from bok_core.provider import CredentialStore, MemoryIntelligence, NetworkPolicy
 from bok_core.service import BokService
 from bok_core.ui_bridge import BokUIBridge
@@ -960,6 +961,29 @@ class OperationalExperienceContracts(unittest.TestCase):
         self.assertEqual(by_name["geolook"]["session_count"], 1)
         self.assertNotEqual(by_name["Adpilot"]["project_id"], by_name["geolook"]["project_id"])
 
+    @patch("bok_core.operational.shutil.which", return_value="/usr/local/bin/codex")
+    @patch("bok_core.operational.subprocess.run")
+    def test_codex_runner_falls_back_without_exposing_prompt_content(self, run, _which) -> None:
+        def execute(command, **_options):
+            model = command[command.index("--model") + 1]
+            if model == "gpt-5.3-codex-spark":
+                return subprocess.CompletedProcess(command, 1, stderr='INPUT JSON: {"secret":"do-not-return"}\nERROR: usage limit')
+            output = Path(command[command.index("--output-last-message") + 1])
+            output.write_text('{"scenarios": []}', encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stderr="")
+
+        run.side_effect = execute
+        runner = CodexCliRunner("gpt-5.3-codex-spark", fallback_models=("gpt-5.6-luna",))
+        result = runner.generate(
+            system="Return JSON.",
+            payload={"secret": "do-not-return"},
+            schema={"type": "object"},
+            cwd=str(self.adpilot),
+        )
+        self.assertEqual(result, {"scenarios": []})
+        self.assertEqual(runner.model, "gpt-5.6-luna")
+        self.assertEqual(run.call_count, 2)
+
     def test_scenario_source_search_stays_inside_one_project(self) -> None:
         result = self.service.project_scenario_sources("Adpilot", query="TikTok API", limit=10)
         refs = {item["source_ref"] for item in result["items"]}
@@ -1109,6 +1133,104 @@ class OperationalExperienceContracts(unittest.TestCase):
         self.assertIn("## 验证门", text)
         self.assertIn("codex-session:adpilot-api", text)
         self.assertIn("codex-session:adpilot-dashboard", text)
+
+    def test_batch_compiler_discovers_multiple_scenarios_and_resumes(self) -> None:
+        class BatchRunner:
+            model = "test-cheap-model"
+            models = ("test-cheap-model",)
+
+            def generate(self, *, system, payload, schema, cwd, images=None):
+                if "identify repeatable business scenarios" in system:
+                    refs = [item["source_ref"] for item in payload["sessions"]]
+                    return {"scenarios": [
+                        {
+                            "scenario_id": "api-onboarding",
+                            "title": "渠道 API 开通与授权",
+                            "business_outcome": "渠道真实数据可被安全读取。",
+                            "keywords": ["API", "授权"],
+                            "source_refs": refs[:1],
+                            "related_projects": [],
+                            "reason": "存在可复用的授权和验证流程。",
+                        },
+                        {
+                            "scenario_id": "dashboard-validation",
+                            "title": "经营看板数据接入与验收",
+                            "business_outcome": "真实渠道数据进入可验证看板。",
+                            "keywords": ["看板", "真实数据"],
+                            "source_refs": refs,
+                            "related_projects": [],
+                            "reason": "存在从数据接入到业务验收的闭环。",
+                        },
+                    ]}
+                if "exactly one Codex conversation" in system:
+                    return {
+                        "source_ref": payload["source_ref"],
+                        "facts": ["使用真实数据"],
+                        "objects": ["店铺", "应用", "看板"],
+                        "preconditions": ["确认市场和账号"],
+                        "actions": ["检查授权并读取数据"],
+                        "decisions": ["未授权则停止接数"],
+                        "tools": ["渠道 API"],
+                        "evidence": ["接口返回真实记录"],
+                        "failures": ["Scope 缺失"],
+                        "verification": ["来源与看板一致"],
+                        "image_evidence": [],
+                        "gaps": [],
+                    }
+                refs = [item["source_ref"] for item in payload["evidence_fragments"]]
+                sourced = lambda statement: {"statement": statement, "source_refs": refs}
+                return {
+                    "title": payload["scenario"],
+                    "business_outcome": "形成可验证业务结果。",
+                    "business_outcome_source_refs": refs,
+                    "trigger": "出现新的业务接入任务。",
+                    "trigger_source_refs": refs,
+                    "scope": [sourced("当前项目")],
+                    "objects": [sourced("业务对象和证据")],
+                    "preconditions": [sourced("确认范围")],
+                    "steps": [{
+                        "id": "execute",
+                        "title": "执行并回读",
+                        "action": "执行受支持动作并回读结果。",
+                        "tool_binding": "项目工具",
+                        "success_evidence": "真实结果可被回读。",
+                        "validity": "stable",
+                        "source_refs": refs,
+                    }],
+                    "decision_points": [sourced("证据不足则停止")],
+                    "failure_recovery": [sourced("补齐证据后重试")],
+                    "verification_gates": [sourced("来源和结果一致")],
+                    "outputs": [sourced("可执行闭环")],
+                    "related_projects": [],
+                    "related_scenarios": [],
+                    "gaps": [],
+                    "contradictions": [],
+                }
+
+        operations = OperationalExperience(self.config, self.service.storage, runner=BatchRunner())
+        first = operations.compile_batch(
+            selectors=["Adpilot"],
+            min_sessions=1,
+            max_projects=1,
+            max_scenarios=2,
+            max_sessions=2,
+        )
+        self.assertEqual(first["status"], "completed")
+        self.assertEqual(first["counts"]["created_or_updated"], 2)
+        project_path = first["projects"][0]["document"]["path"]
+        project_text = self.service.storage.read_text(project_path)
+        self.assertIn("已生成可执行闭环：2", project_text)
+        self.assertEqual(len(list((self.vault / "06-Business/Projects").rglob("Scenarios/*.md"))), 2)
+
+        second = operations.compile_batch(
+            selectors=["Adpilot"],
+            min_sessions=1,
+            max_projects=1,
+            max_scenarios=2,
+            max_sessions=2,
+        )
+        self.assertEqual(second["counts"]["created_or_updated"], 0)
+        self.assertEqual(second["counts"]["existing"], 2)
 
     def test_mcp_exposes_project_scenario_and_loop_contracts(self) -> None:
         names = {item["name"] for item in MCPServer(self.service)._response({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]}
