@@ -296,6 +296,9 @@ class BokAPIHandler(BaseHTTPRequestHandler):
                 "/v1/context",
                 "/v1/sources",
                 "/v1/project/resume",
+                "/v1/operations/projects",
+                "/v1/operations/sources",
+                "/v1/operations/loop",
                 "/v1/memory/capture",
                 "/v1/conversations/observe",
                 "/v1/person/context",
@@ -327,6 +330,34 @@ class BokAPIHandler(BaseHTTPRequestHandler):
                 if route == "/v1/sources":
                     self._require_scope("vault:read")
                     return service.sources(body.get("query", ""), limit=body.get("limit"), token_budget=body.get("token_budget"), semantic=body.get("semantic") is not False, explicit_cloud_consent=body.get("cloud_consent") is True, scope=str(body.get("scope", "default")))
+                if route == "/v1/operations/projects":
+                    self._require_scope("vault:read")
+                    return service.project_contexts(limit=self._int(body.get("limit"), 200, 1, 1000))
+                if route == "/v1/operations/sources":
+                    self._require_scope("vault:read")
+                    return service.project_scenario_sources(
+                        str(body.get("project", "")),
+                        query=str(body.get("query", "")),
+                        limit=self._int(body.get("limit"), 20, 1, 100),
+                    )
+                if route == "/v1/operations/scenarios/discover":
+                    self._require_admin()
+                    return service.discover_project_scenarios(
+                        str(body.get("project", "")),
+                        limit=self._int(body.get("limit"), 80, 1, 200),
+                    )
+                if route == "/v1/operations/loop/extract":
+                    self._require_admin()
+                    return service.extract_operational_loop(
+                        str(body.get("project", "")),
+                        str(body.get("scenario", "")),
+                        query=str(body.get("query", "")),
+                        max_sessions=self._int(body.get("max_sessions"), 8, 1, 20),
+                        source_refs=body.get("source_refs") if isinstance(body.get("source_refs"), list) else None,
+                    )
+                if route == "/v1/operations/loop":
+                    self._require_scope("vault:read")
+                    return service.operational_loop(str(body.get("project", "")), str(body.get("scenario", "")))
                 if route == "/v1/memory/capture":
                     self._require_scope("memory:capture")
                     return service.capture_memory(body.get("material", ""), source=body.get("source"), explicit_cloud_consent=body.get("cloud_consent") is True)
@@ -526,7 +557,10 @@ class BokAPIHandler(BaseHTTPRequestHandler):
                     return {"rotated": True, "token": token}
                 raise BokError("route_not_found", "Bok API route does not exist", status=404)
 
-            mutation = route not in {"/v1/search", "/v1/context", "/v1/sources", "/v1/project/resume", "/v1/person/context"}
+            mutation = route not in {
+                "/v1/search", "/v1/context", "/v1/sources", "/v1/project/resume", "/v1/person/context",
+                "/v1/operations/projects", "/v1/operations/sources", "/v1/operations/scenarios/discover", "/v1/operations/loop",
+            }
             if route in {"/v1/auth/rotate", "/v1/agents/issue"}:
                 payload = invoke()
             else:

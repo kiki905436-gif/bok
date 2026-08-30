@@ -72,6 +72,56 @@
 
 路径留空时读取 `00-System/Active-Context.md` 的 `focus_path`。
 
+## FDE 可执行闭环
+
+### `POST /operations/projects`
+
+按 Codex 会话实际工作目录列出项目上下文。返回项目 ID、名称、本机根目录、会话数和最近活动时间；不复制或返回原始会话正文。
+
+```json
+{"limit": 200}
+```
+
+### `POST /operations/sources`
+
+在一个主要项目上下文内，为业务场景检索相关源会话。返回稳定的 `codex-session:<id>` 引用和会话标题，不返回正文。
+
+```json
+{"project":"Adpilot","query":"TikTok Shop API 广告 API 看板","limit":20}
+```
+
+### `POST /operations/scenarios/discover`
+
+管理员入口。使用配置的低成本 Codex CLI 模型，在项目内把会话聚类为可形成闭环的业务场景。它只返回候选，不写正式闭环。
+
+### `POST /operations/loop/extract`
+
+管理员入口。先检索场景相关会话，再用低成本模型逐会话独立提取 Evidence Fragment（包括受支持的会话图片），最后用综合模型合成有来源引用的 Operational Loop，并写入 `06-Business/Projects/.../Scenarios/...`。图片只在单次提取时作为临时附件传给 Codex CLI，Vault 不复制原图。默认模型分别为 `gpt-5.3-codex-spark` 和 `gpt-5.5`。
+
+```json
+{
+  "project":"Adpilot",
+  "scenario":"泰国 TikTok API 接入与经营看板",
+  "query":"TikTok Shop API Marketing API 授权 数据 看板",
+  "max_sessions":8,
+  "source_refs":[
+    "codex-session:<session-id>"
+  ]
+}
+```
+
+`source_refs` 可选；场景发现已经选出会话时应显式传入，保证提炼使用同一证据集。省略时才在项目边界内按 `query` 检索。提炼过程不会自动把结果标为已验证：存在缺口或冲突时状态为 `needs_evidence`，否则为 `draft`。真实业务执行和回读验收是进入 `validated` 的必要条件。
+
+### `POST /operations/loop`
+
+读取一个已编译闭环，供 Codex、Claude 等 Agent 获取步骤、决策、工具绑定、验证门、缺口和来源引用。
+
+```json
+{"project":"Adpilot","scenario":"thai-tiktok-api-dashboard"}
+```
+
+MCP 对应提供 `bok_project_contexts`、`bok_project_scenario_sources`、`bok_discover_project_scenarios`、`bok_extract_operational_loop` 和 `bok_operational_loop`。其中读取接口可授予普通 Agent；场景发现和闭环提炼会读取本机源会话，因此默认只允许本机管理员触发。
+
 ## 安静记忆接口
 
 ### `POST /conversations/observe`

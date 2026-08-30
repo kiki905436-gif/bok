@@ -54,6 +54,11 @@ DEFAULT_DEFERRED_SEARCH_PREFIXES = (
     "xingya-adventure",
 )
 
+DEFAULT_CODEX_SESSION_ROOTS = (
+    str(Path.home() / ".codex" / "sessions"),
+    str(Path.home() / ".codex" / "archived_sessions"),
+)
+
 
 @dataclass
 class BokConfig:
@@ -75,6 +80,9 @@ class BokConfig:
     embedding_batch_size: int = 32
     conversation_retention_days: int = 14
     personal_core_root: str = ""
+    codex_session_roots: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_CODEX_SESSION_ROOTS)
+    operational_extraction_model: str = "gpt-5.3-codex-spark"
+    operational_synthesis_model: str = "gpt-5.5"
     allowed_write_roots: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_WRITE_ROOTS)
     ignored_dirs: Tuple[str, ...] = field(default_factory=lambda: DEFAULT_IGNORED_DIRS)
     important_memory_types: Tuple[str, ...] = (
@@ -175,6 +183,9 @@ class BokConfig:
             "embedding_batch_size",
             "conversation_retention_days",
             "personal_core_root",
+            "codex_session_roots",
+            "operational_extraction_model",
+            "operational_synthesis_model",
             "allowed_write_roots",
             "ignored_dirs",
             "important_memory_types",
@@ -189,6 +200,7 @@ class BokConfig:
             "important_memory_types",
             "auto_commit_memory_types",
             "deferred_search_prefixes",
+            "codex_session_roots",
         ):
             if key in values:
                 values[key] = tuple(str(item) for item in values[key])
@@ -212,6 +224,9 @@ class BokConfig:
             "conversation_retention_days": self.conversation_retention_days,
             "personal_core_configured": bool(self.personal_core_root),
             "personal_core_name": self.personal_core_path.name if self.personal_core_path else "",
+            "codex_session_roots": [Path(value).expanduser().name for value in self.codex_session_roots],
+            "operational_extraction_model": self.operational_extraction_model,
+            "operational_synthesis_model": self.operational_synthesis_model,
             "auto_start_local_model": self.auto_start_local_model,
             "allowed_write_roots": list(self.allowed_write_roots),
         }
