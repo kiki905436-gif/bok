@@ -1,13 +1,7 @@
-@font-face {
-  font-family: "Fusion Pixel";
-  src: url("./assets/fusion-pixel-10px-proportional-zh_hans.otf.woff2") format("woff2");
-  font-display: swap;
-}
-
 :root {
   color: #172b2d;
   background: #e8ddc4;
-  font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+  font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
   font-synthesis: none;
 }
 
@@ -62,8 +56,8 @@ body {
 }
 
 .drag-handle > div { display: flex; align-items: center; gap: 9px; }
-.note-mark { color: #ff3e91; font: 24px/1 "Fusion Pixel", monospace; }
-h1 { margin: 0; font: 25px/1 "Fusion Pixel", "Microsoft YaHei UI", sans-serif; letter-spacing: 0.02em; }
+.note-mark { color: #ff3e91; font: 700 24px/1 "Avenir Next", "PingFang SC", sans-serif; }
+h1 { margin: 0; font: 700 25px/1.15 "Songti SC", "STSong", serif; letter-spacing: -0.025em; }
 .connection { padding: 4px 7px; border: 1px solid #1c8d83; color: #12675f; background: #dff7ef; cursor: pointer; font-size: 10px; }
 .connection.is-error { border-color: #cf4747; color: #a82e2e; background: #ffe4e0; }
 
@@ -94,7 +88,7 @@ button {
   background: #172b2d;
   box-shadow: 4px 4px 0 #ff3e91;
   cursor: pointer;
-  font: 14px "Fusion Pixel", "Microsoft YaHei UI", sans-serif;
+  font: 600 14px "Avenir Next", "PingFang SC", "Microsoft YaHei UI", sans-serif;
 }
 
 button:hover { background: #087f73; transform: translate(-1px, -1px); }

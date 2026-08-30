@@ -114,6 +114,12 @@ for (let attempt = 0; attempt < 160; attempt += 1) {
 }
 
 const overview = await evaluate(`({
+  primaryNav: [...document.querySelectorAll('#navList > .nav-item, #libraryNavGroup > .nav-group-toggle')].map((item) => item.getAttribute('aria-label')),
+  primaryNavVisible: [...document.querySelectorAll('#navList > .nav-item, #libraryNavGroup > .nav-group-toggle')].every((item) => {
+    const rect = item.getBoundingClientRect();
+    const style = getComputedStyle(item);
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  }),
   focus: document.querySelector('#focusCard')?.innerText || '',
   actions: document.querySelector('#actionList')?.innerText || '',
   files: document.querySelector('#fileCount')?.innerText || '',
@@ -123,6 +129,8 @@ const overview = await evaluate(`({
   overflow: document.documentElement.scrollWidth > window.innerWidth,
   externalResources: performance.getEntriesByType('resource').map((item) => item.name).filter((url) => !url.startsWith(location.origin)),
 })`);
+const expectedPrimaryNav = ["总览", "Bok 工作台", "知识全景", "生产管线", "健康中心", "关于我", "展开全部分类"];
+if (JSON.stringify(overview.primaryNav) !== JSON.stringify(expectedPrimaryNav) || !overview.primaryNavVisible) throw new Error(`Original product navigation changed or became hidden: ${JSON.stringify(overview.primaryNav)}`);
 if (!overview.focus.includes(focusTitle)) throw new Error(`Homepage focus is stale: ${overview.focus}`);
 if (!overview.actions.includes(expectedAction)) throw new Error(`Next actions are stale: ${overview.actions}`);
 if (overview.sync !== "本地同步中") throw new Error(`Unexpected sync state: ${overview.sync}`);
@@ -678,13 +686,18 @@ for (const target of pageTargets) {
       activeNavCount: document.querySelectorAll('#navList .nav-item.is-active').length,
       activeNavView: document.querySelector('#navList .nav-item.is-active')?.dataset.view || '',
       activeNavFilter: getComputedStyle(document.querySelector('#navList .nav-item.is-active')).filter,
+      legacyPixelFonts: [...view.querySelectorAll('*')].filter((node) => {
+        const style = getComputedStyle(node);
+        const nodeRect = node.getBoundingClientRect();
+        return nodeRect.width > 0 && nodeRect.height > 0 && style.visibility !== 'hidden' && style.fontFamily.includes('Fusion Pixel');
+      }).map((node) => node.id ? '#' + node.id : node.className ? '.' + String(node.className).trim().replaceAll(' ', '.') : node.tagName).slice(0, 20),
       unwantedTitleDecoration: [...document.querySelectorAll('#${target.id} .atlas-toolbar > div:first-child, #${target.id} .person-graph-copy h2')].some((node) => {
         const content = getComputedStyle(node, '::after').content;
         return content && content !== 'none' && content !== 'normal';
       }),
     };
   })()`);
-  if (audit.view !== target.view || audit.hidden || audit.width < 200 || audit.height < 100 || audit.textLength < 2 || audit.viewportOverflow || audit.activeNavCount !== 1 || audit.activeNavView !== target.view || audit.activeNavFilter !== 'none' || audit.unwantedTitleDecoration) {
+  if (audit.view !== target.view || audit.hidden || audit.width < 200 || audit.height < 100 || audit.textLength < 2 || audit.viewportOverflow || audit.activeNavCount !== 1 || audit.activeNavView !== target.view || audit.activeNavFilter !== 'none' || audit.legacyPixelFonts.length || audit.unwantedTitleDecoration) {
     throw new Error(`Desktop page audit failed for ${target.view}/${target.scope}: ${JSON.stringify(audit)}`);
   }
   pageAudits.push({ ...target, desktop: audit });

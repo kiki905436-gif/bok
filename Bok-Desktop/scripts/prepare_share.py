@@ -14,6 +14,7 @@ UI_FILES = (
     "index.html",
     "app.js",
     "styles.css",
+    "polish.css",
     "quick-note.html",
     "quick-note-window.js",
     "quick-note-window.css",
