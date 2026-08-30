@@ -1,0 +1,54 @@
+schema_version: 1
+commands:
+  setup: null
+  lint: null
+  typecheck: null
+  unit: python3 AI-Second-Brain-UI/tests/test_product_contracts.py
+  integration: null
+  e2e: null
+  build: null
+  smoke: null
+standards:
+  code:
+  - README.md
+  design:
+  - AI-Second-Brain-UI/index.html
+  - AI-Second-Brain-UI/polish.css
+  test:
+    coverage_floor: null
+    required_suites:
+    - unit
+collaboration:
+  isolation: worktree
+  merge_queue: true
+  protected_resources:
+  - database_migrations
+  - api_contracts
+  - lockfiles
+git:
+  personal_host: github.com
+  personal_owner: kiki905436-gif
+  preferred_personal_remote: github
+  company_hosts:
+  - github.skg.com
+  protected_branches:
+  - main
+  - master
+  branch_prefix: codex/
+  merge_strategy: no_ff
+  require_clean_worktree: true
+  require_current_base: true
+  require_gates: true
+  push_personal_only: true
+  allow_force_push: false
+release:
+  backup_required: true
+  rollback_required: true
+  approval: production
+  health_checks: []
+operations:
+  services: []
+  cron_jobs: []
+  dashboards: []
+  alerts: []
+  runbooks: []

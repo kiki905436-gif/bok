@@ -129,10 +129,10 @@ const overview = await evaluate(`({
   overflow: document.documentElement.scrollWidth > window.innerWidth,
   externalResources: performance.getEntriesByType('resource').map((item) => item.name).filter((url) => !url.startsWith(location.origin)),
 })`);
-const expectedPrimaryNav = ["总览", "Bok 工作台", "知识全景", "生产管线", "健康中心", "关于我", "展开全部分类"];
-if (JSON.stringify(overview.primaryNav) !== JSON.stringify(expectedPrimaryNav) || !overview.primaryNavVisible) throw new Error(`Original product navigation changed or became hidden: ${JSON.stringify(overview.primaryNav)}`);
+const expectedPrimaryNav = ["今天", "项目", "知识", "我的记忆", "展开系统功能"];
+if (JSON.stringify(overview.primaryNav) !== JSON.stringify(expectedPrimaryNav) || !overview.primaryNavVisible) throw new Error(`Primary information architecture changed or became hidden: ${JSON.stringify(overview.primaryNav)}`);
 if (!overview.focus.includes(focusTitle)) throw new Error(`Homepage focus is stale: ${overview.focus}`);
-if (!overview.actions.includes(expectedAction)) throw new Error(`Next actions are stale: ${overview.actions}`);
+if (!overview.focus.includes(expectedAction)) throw new Error(`Next actions are missing from Today: ${overview.focus}`);
 if (overview.sync !== "本地同步中") throw new Error(`Unexpected sync state: ${overview.sync}`);
 if (!overview.contextBackHidden || overview.contextBackDisplay !== "none") throw new Error(`Context back control leaked into the global view: ${JSON.stringify(overview)}`);
 if (overview.overflow) throw new Error("Desktop layout has horizontal overflow.");
@@ -192,52 +192,30 @@ if (process.env.BOUJOY_VAULT_SCREENSHOT_PATH) {
   await evaluate("document.querySelector('.vault-status').open = false; true");
 }
 
-const moreMenu = await evaluate(`(() => {
-  const details = document.querySelector('#filterMore');
-  const summary = details?.querySelector('summary');
-  summary?.click();
-  const menu = details?.querySelector('.filter-more-menu');
-  const rect = menu?.getBoundingClientRect();
-  const probe = rect ? document.elementFromPoint(rect.left + Math.min(20, rect.width / 2), rect.top + Math.min(20, rect.height / 2)) : null;
-  const search = document.querySelector('.search-section');
-  const row = document.querySelector('.filter-row');
-  const searchStyle = search ? getComputedStyle(search) : null;
-  const rowStyle = row ? getComputedStyle(row) : null;
-  const buttonHeights = Array.from(row?.querySelectorAll('button, summary') || []).map((item) => Math.round(item.getBoundingClientRect().height));
+await evaluate("document.querySelector('[data-view=library][data-scope=knowledge]')?.click(); true");
+await delay(80);
+const collectionAudit = await evaluate(`(() => {
+  const collections = [...document.querySelectorAll('#knowledgeCollections [data-collection]')];
+  const placeholderText = document.querySelector('#cardGrid')?.innerText || '';
+  collections.find((item) => item.dataset.collection !== 'all')?.click();
   return {
-    open: Boolean(details?.open),
-    width: Math.round(rect?.width || 0),
-    height: Math.round(rect?.height || 0),
-    visibleAtPoint: Boolean(probe && menu?.contains(probe)),
-    rect: rect ? { left: Math.round(rect.left), top: Math.round(rect.top), right: Math.round(rect.right), bottom: Math.round(rect.bottom) } : null,
-    probe: probe ? { tag: probe.tagName, id: probe.id || '', className: String(probe.className || '') } : null,
-    menuStyle: menu ? { display: getComputedStyle(menu).display, visibility: getComputedStyle(menu).visibility, pointerEvents: getComputedStyle(menu).pointerEvents, zIndex: getComputedStyle(menu).zIndex } : null,
-    searchStyle: searchStyle ? { position: searchStyle.position, zIndex: searchStyle.zIndex, overflow: searchStyle.overflow, isolation: searchStyle.isolation } : null,
-    rowStyle: rowStyle ? { position: rowStyle.position, zIndex: rowStyle.zIndex, overflow: rowStyle.overflow } : null,
-    buttonHeights,
+    visible: !document.querySelector('#knowledgeCollections')?.hidden,
+    count: collections.length,
+    activeCount: document.querySelectorAll('#knowledgeCollections .is-active').length,
+    query: document.querySelector('#activeQueryText')?.textContent || '',
+    placeholdersHidden: !placeholderText.includes('知识卡示例'),
+    emptyScopesHidden: document.querySelector('#filterMore')?.hidden ?? false,
   };
 })()`);
-if (!moreMenu.open || moreMenu.width < 100 || moreMenu.height < 28 || !moreMenu.visibleAtPoint) {
-  throw new Error(`More menu did not visibly open: ${JSON.stringify(moreMenu)}`);
+if (!collectionAudit.visible || collectionAudit.count < 2 || collectionAudit.activeCount !== 1 || !collectionAudit.query.includes('主题') || !collectionAudit.placeholdersHidden || !collectionAudit.emptyScopesHidden) {
+  throw new Error(`Knowledge collections are not structured correctly: ${JSON.stringify(collectionAudit)}`);
 }
-if (moreMenu.buttonHeights.some((height) => height < 28 || height > 44)) {
-  throw new Error(`Filter controls stretched after opening More: ${JSON.stringify(moreMenu.buttonHeights)}`);
-}
-if (process.env.BOUJOY_MORE_SCREENSHOT_PATH) {
+if (process.env.BOUJOY_KNOWLEDGE_SCREENSHOT_PATH) {
   await delay(200);
   const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }, sessionId);
-  writeFileSync(process.env.BOUJOY_MORE_SCREENSHOT_PATH, Buffer.from(screenshot.data, "base64"));
+  writeFileSync(process.env.BOUJOY_KNOWLEDGE_SCREENSHOT_PATH, Buffer.from(screenshot.data, "base64"));
 }
-await evaluate("document.querySelector('#filterMore [data-scope=content]')?.click(); true");
-await delay(80);
-const moreSelection = await evaluate(`({
-  active: document.querySelector('#filterMore [data-scope=content]')?.getAttribute('aria-pressed') || '',
-  query: document.querySelector('#activeQueryText')?.textContent || '',
-})`);
-if (moreSelection.active !== "true" || !moreSelection.query.includes("内容")) {
-  throw new Error(`More menu option did not switch scope: ${JSON.stringify(moreSelection)}`);
-}
-await evaluate("document.querySelector('#filterRow [data-scope=library]')?.click(); true");
+await evaluate("document.querySelector('#knowledgeCollections [data-collection=all]')?.click(); true");
 
 const frameAudit = await evaluate(`(async () => {
   const scroller = document.scrollingElement;
@@ -662,12 +640,14 @@ for (const tab of ["profile", "graph", "review", "evidence", "cleanup"]) {
 
 const pageTargets = [
   { view: "overview", scope: "library", id: "overviewView" },
+  { view: "library", scope: "projects", id: "libraryView" },
+  { view: "library", scope: "knowledge", id: "libraryView" },
+  { view: "person", scope: "library", id: "personView" },
   { view: "memory", scope: "library", id: "memoryView" },
   { view: "atlas", scope: "library", id: "atlasView" },
   { view: "pipeline", scope: "library", id: "pipelineView" },
   { view: "health", scope: "library", id: "healthView" },
-  { view: "person", scope: "library", id: "personView" },
-  ...["projects", "knowledge", "content", "prompts", "business", "skills", "all"].map((scope) => ({ view: "library", scope, id: "libraryView" })),
+  { view: "library", scope: "all", id: "libraryView" },
 ];
 const pageAudits = [];
 for (const target of pageTargets) {
@@ -704,6 +684,23 @@ for (const target of pageTargets) {
 }
 
 await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, sessionId);
+const mobileNavAudit = await evaluate(`[...document.querySelectorAll('#navList > .nav-item')].map((item) => {
+  const label = item.querySelector('.nav-copy strong');
+  const rect = label?.getBoundingClientRect();
+  const style = label ? getComputedStyle(label) : null;
+  return {
+    text: label?.textContent || '',
+    width: Math.round(rect?.width || 0),
+    height: Math.round(rect?.height || 0),
+    display: style?.display || '',
+    visibility: style?.visibility || '',
+    opacity: style?.opacity || '',
+    color: style?.color || '',
+  };
+})`);
+if (mobileNavAudit.some((item) => !item.text || item.width < 10 || item.height < 8 || item.display === 'none' || item.visibility === 'hidden' || item.opacity === '0')) {
+  throw new Error(`Mobile primary navigation labels are not visible: ${JSON.stringify(mobileNavAudit)}`);
+}
 for (const target of pageTargets) {
   await evaluate(`document.querySelector('[data-view="${target.view}"][data-scope="${target.scope}"]')?.click(); true`);
   await delay(target.view === "atlas" ? 120 : 35);
@@ -722,6 +719,32 @@ for (const target of pageTargets) {
   }
   const entry = pageAudits.find((item) => item.view === target.view && item.scope === target.scope);
   if (entry) entry.mobile = audit;
+}
+await evaluate("document.querySelector('[data-view=overview]').click() || true");
+if (process.env.BOUJOY_MOBILE_SCREENSHOT_PATH) {
+  await delay(120);
+  const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }, sessionId);
+  writeFileSync(process.env.BOUJOY_MOBILE_SCREENSHOT_PATH, Buffer.from(screenshot.data, "base64"));
+}
+await send("Emulation.setDeviceMetricsOverride", { width: 768, height: 1024, deviceScaleFactor: 1, mobile: false }, sessionId);
+for (const target of pageTargets) {
+  await evaluate(`document.querySelector('[data-view="${target.view}"][data-scope="${target.scope}"]')?.click(); true`);
+  await delay(target.view === "atlas" ? 120 : 35);
+  const audit = await evaluate(`(() => {
+    const view = document.querySelector('#${target.id}');
+    const rect = view?.getBoundingClientRect();
+    return {
+      hidden: view?.hidden ?? true,
+      width: Math.round(rect?.width || 0),
+      height: Math.round(rect?.height || 0),
+      viewportOverflow: document.documentElement.scrollWidth > window.innerWidth,
+    };
+  })()`);
+  if (audit.hidden || audit.width < 300 || audit.height < 100 || audit.viewportOverflow) {
+    throw new Error(`Tablet page audit failed for ${target.view}/${target.scope}: ${JSON.stringify(audit)}`);
+  }
+  const entry = pageAudits.find((item) => item.view === target.view && item.scope === target.scope);
+  if (entry) entry.tablet = audit;
 }
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false }, sessionId);
 await evaluate("document.querySelector('[data-view=overview]').click() || true");
@@ -759,7 +782,7 @@ if (consoleErrors.length || failedResources.length) {
   throw new Error(`Browser errors: ${consoleErrors.join(" | ")} | Failed resources: ${failedResources.join(" | ") || "unknown"}`);
 }
 
-console.log(JSON.stringify({ status: "PASS", overview, moreMenu, moreSelection, frameAudit, memoryOverview, personProfile, reader, auditedPages: pageAudits.length, auditedMemoryTabs: 6, auditedPersonTabs: 5 }, null, 2));
+console.log(JSON.stringify({ status: "PASS", overview, collectionAudit, frameAudit, mobileNavAudit, memoryOverview, personProfile, reader, auditedPages: pageAudits.length, auditedMemoryTabs: 6, auditedPersonTabs: 5 }, null, 2));
 } finally {
   socket?.close();
   if (browser?.exitCode === null) {

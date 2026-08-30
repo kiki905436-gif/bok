@@ -1,0 +1,15 @@
+{
+  "summary": "Bok 是面向 Codex、Claude Code 等 AI Agent 的本地优先长期记忆层，以 Markdown Vault 为事实源，并通过本机 UI、MCP 和认证 API 提供检索、项目续接与个人记忆治理。",
+  "highlights": [
+    "已将本机 72 份脱敏 Codex rollout 总结和 44 个任务组索引导入独立 Bok Vault，重建为 102 篇文档、811 个检索片段，并完成 UI 与代表性查询读回验证。",
+    "重构 Bok 全套 UI 为成熟研究工作台风格，保留原有 7 个导航、13 个页面和全部记忆交互；建立宋体展示层、Avenir/苹方界面层与等宽技术字体系，并完成原生 macOS 安装验收。",
+    "Bok 信息架构收敛为今天、项目、知识、我的记忆四个一级入口；72 份导入来源按业务主题聚合，空分类与系统管理按需隐藏，原始数据和全部操作能力保留。"
+  ],
+  "todos": [],
+  "online_urls": [],
+  "local_deploy": {
+    "command": "./AI-Second-Brain-UI/open-preview.command",
+    "cwd": null
+  },
+  "servers": []
+}

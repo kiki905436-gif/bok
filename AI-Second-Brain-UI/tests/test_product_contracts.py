@@ -70,19 +70,17 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('"下一步行动"', browser_source)
         self.assertIn('"下一步行动"', desktop_source)
 
-    def test_visual_polish_preserves_the_original_product_navigation(self) -> None:
+    def test_information_architecture_keeps_capabilities_but_prioritizes_real_work(self) -> None:
         html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
         source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
         polish = (UI_ROOT / "polish.css").read_text(encoding="utf-8-sig")
         quick_note_styles = (UI_ROOT / "quick-note-window.css").read_text(encoding="utf-8-sig")
         expected_entries = (
-            ('data-view="overview"', 'aria-label="总览"'),
-            ('data-view="memory"', 'aria-label="Bok 工作台"'),
-            ('data-view="atlas"', 'aria-label="知识全景"'),
-            ('data-view="pipeline"', 'aria-label="生产管线"'),
-            ('data-view="health"', 'aria-label="健康中心"'),
-            ('data-view="person"', 'aria-label="关于我"'),
-            ('id="libraryNavGroup"', 'aria-label="展开全部分类"'),
+            ('data-view="overview"', 'aria-label="今天"'),
+            ('data-scope="projects"', 'aria-label="项目"'),
+            ('data-scope="knowledge"', 'aria-label="知识"'),
+            ('data-view="person"', 'aria-label="我的记忆"'),
+            ('id="libraryNavGroup"', 'aria-label="展开系统功能"'),
         )
         positions = []
         for marker, label in expected_entries:
@@ -92,11 +90,24 @@ class ProductContracts(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         for scope in ("projects", "knowledge", "content", "prompts", "business", "skills", "all"):
             self.assertIn(f'data-scope="{scope}"', html)
+        for route in (
+            'data-memory-tab-target="search"',
+            'data-memory-tab-target="inbox"',
+            'data-memory-tab-target="notes"',
+            'data-view="pipeline"',
+            'data-view="atlas"',
+            'data-view="health"',
+            'data-memory-tab-target="settings"',
+        ):
+            self.assertIn(route, html)
         self.assertIn('view: "overview"', source)
         self.assertNotIn("legacy-nav-routes", html)
-        self.assertIn('href="./polish.css?v=20260830-2"', html)
+        self.assertIn('href="./polish.css?v=20260830-3"', html)
         self.assertIn("UI-only visual layer", polish)
         self.assertIn('--desk-font-display: "Songti SC"', polish)
+        self.assertIn("Information architecture v2", polish)
+        self.assertIn("KNOWLEDGE_COLLECTIONS", source)
+        self.assertIn("STARTER_PLACEHOLDER_PATHS", source)
         self.assertNotIn('"Fusion Pixel"', source)
         self.assertNotIn('"Fusion Pixel"', quick_note_styles)
 
