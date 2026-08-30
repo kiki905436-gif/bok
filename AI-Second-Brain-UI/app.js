@@ -38,6 +38,7 @@ const state = {
   lastSync: null,
   view: "overview",
   scope: "library",
+  collection: "all",
   search: "",
   visibleCardCount: CONFIG.cardPageSize,
   selectedPath: null,
@@ -77,6 +78,7 @@ const $ = (selector) => document.querySelector(selector);
 const elements = {
   navList: $("#navList"),
   libraryNavGroup: $("#libraryNavGroup"),
+  systemPipelineNav: $("#systemPipelineNav"),
   mainEyebrow: $("#mainEyebrow"),
   mainTitle: $("#mainTitle"),
   mainSubtitle: $("#mainSubtitle"),
@@ -114,14 +116,19 @@ const elements = {
   overviewResultCount: $("#overviewResultCount"),
   viewAllCards: $("#viewAllCards"),
   videoShowcase: $("#videoShowcase"),
+  videoShowcaseSection: $("#videoShowcaseSection"),
   videoResultCount: $("#videoResultCount"),
   videoEmpty: $("#videoEmpty"),
   cardsTitle: $("#cardsTitle"),
+  cardsDescription: $("#cardsDescription"),
+  knowledgeCollections: $("#knowledgeCollections"),
   resultCount: $("#resultCount"),
   cardGrid: $("#cardGrid"),
   loadMoreRow: $("#loadMoreRow"),
   loadMore: $("#loadMore"),
   emptyState: $("#emptyState"),
+  emptyStateTitle: $("#emptyStateTitle"),
+  emptyStateCopy: $("#emptyStateCopy"),
   atlasStage: $("#atlasStage"),
   knowledgeGraph: $("#knowledgeGraph"),
   atlasStats: $("#atlasStats"),
@@ -702,8 +709,47 @@ function setSyncState(mode, label) {
   elements.syncLabel.textContent = label;
 }
 
+const STARTER_PLACEHOLDER_PATHS = new Set([
+  "02-Projects/welcome-to-bok.md",
+  "03-Knowledge/knowledge-card-example.md",
+  "04-Content/README.md",
+  "05-Prompts/README.md",
+  "06-Business/README.md",
+  "90-Archive/README.md",
+  "98-Skills/README.md",
+]);
+
+const KNOWLEDGE_COLLECTIONS = [
+  { key: "adpilot", label: "Adpilot 与运营系统", description: "库存、履约、数据源和经营产品" },
+  { key: "thailand", label: "泰国运营", description: "TikTok、Shopee、Lazada 与本地经营" },
+  { key: "creator", label: "达人 CRM", description: "达人建联、归因、直播与合作流程" },
+  { key: "marketplace", label: "电商平台", description: "Amazon、Temu 与平台接入" },
+  { key: "geo", label: "GEO 与洞察", description: "GeoLook、生成式搜索与测量" },
+  { key: "feishu", label: "飞书与协作", description: "报表、文档、审批与团队流程" },
+  { key: "engineering", label: "工程与发布", description: "Bok、Helm、Codex、部署与可靠性" },
+  { key: "other", label: "其他知识", description: "尚未归入稳定主题的来源记录" },
+];
+
+function isStarterPlaceholder(record) {
+  return STARTER_PLACEHOLDER_PATHS.has(record.path);
+}
+
+function knowledgeCollection(record) {
+  const haystack = `${record.title} ${record.path} ${record.tags.join(" ")}`.toLocaleLowerCase("zh-CN");
+  const key = /泰国|thailand|tiktok|shopee|lazada/u.test(haystack) ? "thailand"
+    : /达人|creator|influenc|直播|nox/u.test(haystack) ? "creator"
+      : /geolook|\bgeo\b|gemini|生成式搜索|提及率/u.test(haystack) ? "geo"
+        : /飞书|feishu|lark|妙搭|会议纪要/u.test(haystack) ? "feishu"
+          : /amazon|temu|seller|marketplace|店铺|铺货/u.test(haystack) ? "marketplace"
+            : /adpilot|inventory|库存|fba|aura|物流|履约|经营驾驶舱/u.test(haystack) ? "adpilot"
+              : /bok|helm|codex|mcp|部署|发布|服务器|浏览器|工程|git/u.test(haystack) ? "engineering"
+                : "other";
+  return KNOWLEDGE_COLLECTIONS.find((item) => item.key === key) || KNOWLEDGE_COLLECTIONS.at(-1);
+}
+
 function scopeAllows(record, scope = state.scope) {
   if (scope === "all") return true;
+  if (isStarterPlaceholder(record)) return false;
   if (scope === "library") return record.visibility === "library" && record.category.nav !== "system";
   if (scope === "skills") return record.category.nav === "skills";
   if (scope === "projects") return record.category.nav === "projects" && record.visibility !== "archive";
@@ -729,17 +775,23 @@ function searchMatch(record, tokens, fullQuery) {
   return { score, reason };
 }
 
-function filteredRecords(scope = state.scope) {
+function filteredRecords(scope = state.scope, { ignoreCollection = false } = {}) {
   const query = state.search.trim().toLocaleLowerCase("zh-CN");
   const tokens = query.replace(/[^\p{L}\p{N}_+.#-]+/gu, " ").split(/\s+/u).filter(Boolean);
   return state.files.map((record) => {
     if (!scopeAllows(record, scope)) return null;
+    if (!ignoreCollection && scope === "knowledge" && state.collection !== "all" && knowledgeCollection(record).key !== state.collection) return null;
     const match = searchMatch(record, tokens, query);
     return match ? { record, ...match } : null;
   }).filter(Boolean).sort((a, b) => b.score - a.score || b.record.lastModified - a.record.lastModified);
 }
 
 function updateScopeControls() {
+  const conditionalScopes = [...elements.filterRow.querySelectorAll("[data-conditional-scope]")];
+  conditionalScopes.forEach((button) => {
+    button.hidden = !state.files.some((record) => scopeAllows(record, button.dataset.scope));
+  });
+  if (elements.filterMore) elements.filterMore.hidden = conditionalScopes.every((button) => button.hidden);
   elements.filterRow.querySelectorAll("[data-scope]").forEach((button) => {
     const active = button.dataset.scope === state.scope;
     button.classList.toggle("is-active", active);
@@ -748,6 +800,9 @@ function updateScopeControls() {
   const labels = { library: "精选", projects: "项目", knowledge: "知识", content: "内容", prompts: "提示词", business: "商业", skills: "Skills", all: "全部文件" };
   const conditions = [];
   if (state.scope !== "library") conditions.push(`范围：${labels[state.scope] || state.scope}`);
+  if (state.scope === "knowledge" && state.collection !== "all") {
+    conditions.push(`主题：${KNOWLEDGE_COLLECTIONS.find((item) => item.key === state.collection)?.label || state.collection}`);
+  }
   if (state.search.trim()) conditions.push(`搜索：${state.search.trim()}`);
   if (elements.filterMore && ["content", "prompts", "business", "skills", "all"].includes(state.scope)) elements.filterMore.open = true;
   elements.activeQuery.hidden = conditions.length === 0;
@@ -796,6 +851,7 @@ function renderFocus() {
   if (!record) return;
   const rawProjectState = stripMarkdown(String(record.frontmatter.stage || record.status || ""));
   const projectState = rawProjectState && rawProjectState.length <= 12 && !/[-_/]/u.test(rawProjectState) ? rawProjectState : "正在推进";
+  const nextActions = (record.actions || []).filter((item) => !item.done && !/备份/u.test(item.text)).slice(0, 3);
   elements.focusCard.innerHTML = `
     <div class="focus-project">
       <div class="focus-copy">
@@ -805,7 +861,11 @@ function renderFocus() {
         <span class="focus-registration" aria-hidden="true"></span>
       </div>
     </div>
-    <button class="primary-button" data-open="${escapeHtml(record.path)}">打开</button>`;
+    <div class="focus-next-actions">
+      <span>下一步</span>
+      ${nextActions.length ? `<ol>${nextActions.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ol>` : `<p>项目暂时没有登记下一步。</p>`}
+    </div>
+    <button class="primary-button" data-open="${escapeHtml(record.path)}">打开项目</button>`;
   elements.focusCard.querySelector("[data-open]")?.addEventListener("click", () => selectRecord(record.path, true));
 }
 
@@ -859,6 +919,7 @@ function pipelineData() {
 function renderPipeline() {
   const items = pipelineData();
   const completed = items.filter((item) => /完整链路/u.test(item.status)).length;
+  if (elements.systemPipelineNav) elements.systemPipelineNav.hidden = items.length === 0;
   elements.pipelineSummary.textContent = `${completed} 条完整链路 · ${items.length} 个主题`;
   elements.pipelinePreview.innerHTML = items.slice(0, 4).map((item) => {
     const done = item.stages.filter((stage) => stage.state === "done").length;
@@ -881,7 +942,8 @@ function cardMarkup(item, index = 0) {
   const visibility = record.visibility === "technical" ? "技术文件" : record.visibility === "archive" ? "归档" : "";
   const rawType = String(record.frontmatter.type || "").trim();
   const typeLabels = { project: "项目", knowledge: "知识", "technical-knowledge": "知识", content: "内容", prompt: "提示词", business: "商业", skill: "Skill", archive: "归档" };
-  const typeLabel = typeLabels[rawType.toLocaleLowerCase("en-US")] || (/\p{Script=Han}/u.test(rawType) ? rawType : record.category.type);
+  const sourceRecord = record.path.includes("/Codex-Experience/Rollouts/");
+  const typeLabel = sourceRecord ? "来源记录" : (typeLabels[rawType.toLocaleLowerCase("en-US")] || (/\p{Script=Han}/u.test(rawType) ? rawType : record.category.type));
   return `<article class="knowledge-card${record.path === state.selectedPath ? " is-selected" : ""}" data-path="${escapeHtml(record.path)}" tabindex="0" role="button" aria-label="打开 ${escapeHtml(record.title)}" style="--delay:${Math.min(index * 28, 220)}ms">
     <div class="card-top"><span class="card-type">${escapeHtml(typeLabel)}</span>${visibility ? `<span class="visibility-chip">${visibility}</span>` : ""}</div>
     <h3>${escapeHtml(record.title)}</h3>
@@ -900,22 +962,57 @@ function bindCards(container) {
   });
 }
 
+function renderKnowledgeCollections() {
+  const knowledge = state.files.filter((record) => scopeAllows(record, "knowledge"));
+  const counts = new Map();
+  knowledge.forEach((record) => {
+    const collection = knowledgeCollection(record);
+    counts.set(collection.key, (counts.get(collection.key) || 0) + 1);
+  });
+  const available = KNOWLEDGE_COLLECTIONS.filter((collection) => counts.has(collection.key));
+  const sourceCount = knowledge.filter((record) => record.path.includes("/Codex-Experience/Rollouts/")).length;
+  elements.knowledgeCollections.hidden = state.scope !== "knowledge";
+  if (state.scope !== "knowledge") return;
+  elements.knowledgeCollections.innerHTML = `
+    <div class="collection-overview">
+      <div><strong>${available.length} 个主题集合</strong><span>${sourceCount} 条原始记录作为可追溯来源保留</span></div>
+      <button class="collection-filter${state.collection === "all" ? " is-active" : ""}" data-collection="all">全部知识 <b>${knowledge.length}</b></button>
+    </div>
+    <div class="collection-grid">
+      ${available.map((collection) => `<button class="collection-card${state.collection === collection.key ? " is-active" : ""}" data-collection="${escapeHtml(collection.key)}"><span>${escapeHtml(collection.label)}</span><small>${escapeHtml(collection.description)}</small><b>${counts.get(collection.key)}</b></button>`).join("")}
+    </div>`;
+  elements.knowledgeCollections.querySelectorAll("[data-collection]").forEach((button) => button.addEventListener("click", () => {
+    state.collection = button.dataset.collection;
+    state.visibleCardCount = CONFIG.cardPageSize;
+    renderCards();
+  }));
+}
+
 function renderCards() {
   updateScopeControls();
   const all = filteredRecords();
   const visible = all.slice(0, state.visibleCardCount);
   const remaining = Math.max(0, all.length - visible.length);
-  const scopeLabels = { library: "精选内容", projects: "项目", knowledge: "知识库", content: "内容", prompts: "提示词", business: "商业", skills: "Skills", all: "全部文件" };
+  const scopeLabels = { library: "精选内容", projects: "项目", knowledge: "知识", content: "内容", prompts: "提示词", business: "商业", skills: "Skills", all: "原始文件" };
   elements.cardsTitle.textContent = scopeLabels[state.scope] || "内容";
+  elements.cardsDescription.textContent = state.scope === "projects" ? "围绕状态、决策、下一步和证据继续工作。"
+    : state.scope === "knowledge" ? "按主题组织可复用结论，原始记录保留为来源。"
+      : state.scope === "all" ? "完整查看 Vault 中的系统文件、来源记录和占位说明。"
+        : "只在这里展示已经产生真实内容的类型。";
+  renderKnowledgeCollections();
   elements.resultCount.textContent = `${all.length} 条结果 · 已展示 ${visible.length}`;
   elements.cardGrid.innerHTML = visible.map(cardMarkup).join("");
   elements.cardGrid.hidden = !all.length;
   elements.emptyState.hidden = Boolean(all.length);
+  const hasConditions = Boolean(state.search.trim() || (state.scope === "knowledge" && state.collection !== "all"));
+  elements.emptyStateTitle.textContent = hasConditions ? "没有找到匹配内容" : "这里还没有真实内容";
+  elements.emptyStateCopy.textContent = hasConditions ? "换一个关键词或清除筛选条件。" : "产生第一条内容后，这个类型会自动出现，不需要提前维护空目录。";
   elements.loadMoreRow.hidden = remaining === 0;
   elements.loadMore.textContent = `再加载 ${Math.min(CONFIG.cardPageSize, remaining)} 条`;
   bindCards(elements.cardGrid);
 
-  const overviewItems = filteredRecords("library").slice(0, 4);
+  const currentProjectPath = currentProjectRecord()?.path;
+  const overviewItems = filteredRecords("knowledge", { ignoreCollection: true }).filter((item) => item.record.path !== currentProjectPath).slice(0, 4);
   elements.overviewResultCount.textContent = `${overviewItems.length} 条`;
   elements.overviewCardGrid.innerHTML = overviewItems.map(cardMarkup).join("");
   bindCards(elements.overviewCardGrid);
@@ -950,6 +1047,7 @@ function indexedVideos() {
 
 function renderVideoShowcase() {
   const videos = indexedVideos();
+  elements.videoShowcaseSection.hidden = videos.length === 0;
   elements.videoResultCount.textContent = `${videos.length} 个视频`;
   elements.videoEmpty.hidden = videos.length > 0;
   elements.videoShowcase.innerHTML = videos.map((video, index) => `
@@ -960,19 +1058,22 @@ function renderVideoShowcase() {
 }
 
 const VIEW_COPY = {
-  overview: ["LOCAL-FIRST KNOWLEDGE", "你的第二大脑", "项目、知识与方法，在一个本地空间持续生长。"],
-  memory: ["BOK MEMORY", "今天要继续什么", "快速记录、可靠检索、安静记忆和可撤销操作。"],
-  library: ["知识检索", "找到可以复用的内容", "一套范围筛选，不让分类条件互相打架。"],
+  overview: ["TODAY", "今天", "从当前项目继续，知识和动作都围绕它展开。"],
+  memory: ["SYSTEM · MEMORY", "记忆管理", "搜索、收件箱、随手记和备份集中在系统层。"],
+  library: ["STRUCTURED LIBRARY", "知识", "从主题集合进入结论，需要时再下钻到原始来源。"],
   pipeline: ["内容生产", "从知识走到成片", "看见每个主题所处阶段和缺失环节。"],
   atlas: ["关系探索", "知识全景", "用真实引用连接分散的 Markdown。"],
   health: ["只读诊断", "健康中心", "快速确认索引、环境和待整理事项。"],
-  person: ["PERSONAL CORE", "关于我", "看见它记住了什么、为什么记住，以及哪条记忆影响了回答。"],
+  person: ["PERSONAL CORE", "我的记忆", "只保留稳定、有证据且能够纠正的长期理解。"],
 };
 
 function setView(view, scope) {
   const viewChanged = state.view !== view;
   state.view = view;
-  if (scope) state.scope = scope;
+  if (scope) {
+    state.scope = scope;
+    if (scope !== "knowledge") state.collection = "all";
+  }
   state.visibleCardCount = CONFIG.cardPageSize;
   state.selectedPath = null;
   renderView();
@@ -989,17 +1090,20 @@ function renderView() {
   ["overview", "memory", "library", "pipeline", "atlas", "health", "person"].forEach((view) => {
     elements[`${view}View`].hidden = state.view !== view;
   });
-  const copy = VIEW_COPY[state.view] || VIEW_COPY.overview;
+  let copy = VIEW_COPY[state.view] || VIEW_COPY.overview;
+  if (state.view === "library" && state.scope === "projects") copy = ["PROJECTS", "项目", "从项目状态、关键决策和下一步继续工作。"];
+  if (state.view === "library" && state.scope === "all") copy = ["SYSTEM · SOURCES", "原始文件", "完整查看 Markdown 事实源和系统文件。"];
   [elements.mainEyebrow.textContent, elements.mainTitle.textContent, elements.mainSubtitle.textContent] = copy;
-  const special = ["memory", "pipeline", "atlas", "health", "person"].includes(state.view);
-  elements.searchSection.hidden = special;
-  document.body.classList.toggle("context-hidden", special);
+  elements.searchSection.hidden = state.view !== "library";
+  document.body.classList.add("context-hidden");
   elements.navList.querySelectorAll(".nav-item").forEach((button) => {
-    const active = button.dataset.view === state.view && (state.view !== "library" || button.dataset.scope === state.scope);
+    const active = button.dataset.view === state.view
+      && (state.view !== "library" || button.dataset.scope === state.scope)
+      && (state.view !== "memory" || button.dataset.memoryTabTarget === state.memoryTab);
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
   });
-  if (elements.libraryNavGroup) elements.libraryNavGroup.open = state.view === "library";
+  if (elements.libraryNavGroup) elements.libraryNavGroup.open = ["memory", "pipeline", "atlas", "health"].includes(state.view) || (state.view === "library" && state.scope === "all");
   updateScopeControls();
   if (state.view !== "atlas" && state.atlasFrame) {
     cancelAnimationFrame(state.atlasFrame);
@@ -2111,6 +2215,7 @@ function selectRecord(path, openReader = true) {
   const record = state.files.find((item) => item.path === normalized);
   if (!record) { showToast(`未找到知识库文件：${normalized}`); return; }
   state.selectedPath = record.path;
+  document.body.classList.remove("context-hidden");
   renderSelectedContext(record);
   elements.contextPanel.classList.add("has-selection");
   if (state.view === "library" || state.view === "overview") renderCards();
@@ -2118,6 +2223,7 @@ function selectRecord(path, openReader = true) {
 }
 
 function renderSelectedContext(record) {
+  document.body.classList.remove("context-hidden");
   elements.contextTitle.textContent = record.title;
   elements.closeSelection.hidden = false;
   const actions = record.actions.length ? record.actions.slice(0, 4) : [{ text: record.excerpt, done: false }];
@@ -2147,15 +2253,12 @@ function renderGlobalContext() {
     if (selected) { renderSelectedContext(selected); return; }
     state.selectedPath = null;
   }
+  document.body.classList.add("context-hidden");
   elements.contextPanel.classList.remove("has-selection");
-  elements.contextTitle.textContent = "当前工作";
+  elements.contextTitle.textContent = "内容详情";
   elements.closeSelection.hidden = true;
-  const record = currentProjectRecord();
-  const actions = (record?.actions || []).filter((item) => !/备份/u.test(item.text)).slice(0, 4);
-  renderContextActions(record, actions);
-  const recent = filteredRecords("library").slice(0, 3).map((item) => item.record);
-  elements.timeline.innerHTML = recent.map((record, index) => `<button class="timeline-item" data-path="${escapeHtml(record.path)}"><span class="timeline-dot${index === 0 ? " is-accent" : ""}"></span><strong>${escapeHtml(record.title)}</strong></button>`).join("");
-  elements.timeline.querySelectorAll("[data-path]").forEach((button) => button.addEventListener("click", () => selectRecord(button.dataset.path, true)));
+  elements.actionList.innerHTML = "";
+  elements.timeline.innerHTML = "";
   renderTagCloud([]);
 }
 
@@ -2165,9 +2268,10 @@ function renderTagCloud(tags) {
   elements.tagCloud.innerHTML = tags.map((tag) => `<button data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`).join("");
   elements.tagCloud.querySelectorAll("[data-tag]").forEach((button) => button.addEventListener("click", () => {
     state.search = button.dataset.tag;
-    state.scope = "library";
+    state.scope = "knowledge";
+    state.collection = "all";
     elements.searchInput.value = state.search;
-    setView("library", "library");
+    setView("library", "knowledge");
   }));
 }
 
@@ -2717,9 +2821,9 @@ function showToast(message) {
 window.showNativeVaultError = (message) => showToast(String(message || "无法切换知识库。"));
 
 function clearConditions() {
-  state.search = ""; state.scope = "library"; state.visibleCardCount = CONFIG.cardPageSize;
+  state.search = ""; state.collection = "all"; state.visibleCardCount = CONFIG.cardPageSize;
   elements.searchInput.value = "";
-  if (state.view === "overview") renderCards(); else setView("library", "library");
+  if (state.view === "overview") renderCards(); else setView("library", state.scope === "library" ? "knowledge" : state.scope);
 }
 
 elements.connectVault.addEventListener("click", connectVault);
@@ -2887,15 +2991,18 @@ elements.cleanupNow.addEventListener("click", openCleanupDialog);
 elements.confirmCleanup.addEventListener("click", (event) => { event.preventDefault(); executeCleanup(); });
 elements.folderFallback.addEventListener("change", async (event) => { state.rootHandle = null; state.fallbackFiles = [...event.target.files]; await refreshVault({ force: true, announce: true }); });
 elements.loadMore.addEventListener("click", () => { state.visibleCardCount += CONFIG.cardPageSize; renderCards(); });
-elements.viewAllCards.addEventListener("click", () => setView("library", "library"));
+elements.viewAllCards.addEventListener("click", () => setView("library", "knowledge"));
 elements.navList.addEventListener("click", (event) => {
   const button = event.target.closest(".nav-item");
-  if (button) setView(button.dataset.view, button.dataset.scope);
+  if (!button) return;
+  if (button.dataset.memoryTabTarget) state.memoryTab = button.dataset.memoryTabTarget;
+  if (button.dataset.scope === "knowledge") state.collection = "all";
+  setView(button.dataset.view, button.dataset.scope);
 });
 elements.filterRow.addEventListener("click", (event) => {
   const button = event.target.closest("[data-scope]");
   if (!button) return;
-  state.scope = button.dataset.scope; state.visibleCardCount = CONFIG.cardPageSize;
+  state.scope = button.dataset.scope; state.collection = "all"; state.visibleCardCount = CONFIG.cardPageSize;
   setView(state.view === "overview" && state.scope === "library" ? "overview" : "library", state.scope);
 });
 elements.searchInput.addEventListener("input", (event) => {

@@ -7,9 +7,9 @@
     <title>Boujoy知识库</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css?v=20260824-22" />
-    <link rel="stylesheet" href="./polish.css?v=20260830-2" />
+    <link rel="stylesheet" href="./polish.css?v=20260830-3" />
   </head>
-  <body>
+  <body class="context-hidden">
     <div class="app-shell">
       <aside class="sidebar" aria-label="知识库导航">
         <div class="brand">
@@ -18,34 +18,31 @@
         </div>
 
         <nav class="nav-list" id="navList">
-          <button class="nav-item is-active" data-view="overview" data-scope="library" aria-current="page" aria-label="总览">
-            <span class="nav-number">01</span><span class="nav-copy"><strong>总览</strong><small>HOME</small></span>
+          <button class="nav-item is-active" data-view="overview" data-scope="library" aria-current="page" aria-label="今天">
+            <span class="nav-number">01</span><span class="nav-copy"><strong>今天</strong><small>TODAY</small></span>
           </button>
-          <button class="nav-item" data-view="memory" data-scope="library" aria-controls="memoryView" aria-label="Bok 工作台">
-            <span class="nav-number">02</span><span class="nav-copy"><strong>Bok 工作台</strong><small>MEMORY</small></span>
+          <button class="nav-item" data-view="library" data-scope="projects" aria-controls="libraryView" aria-label="项目">
+            <span class="nav-number">02</span><span class="nav-copy"><strong>项目</strong><small>PROJECTS</small></span>
           </button>
-          <button class="nav-item" data-view="atlas" data-scope="library" aria-label="知识全景">
-            <span class="nav-number">03</span><span class="nav-copy"><strong>知识全景</strong><small>GRAPH</small></span>
+          <button class="nav-item" data-view="library" data-scope="knowledge" aria-controls="libraryView" aria-label="知识">
+            <span class="nav-number">03</span><span class="nav-copy"><strong>知识</strong><small>KNOWLEDGE</small></span>
           </button>
-          <button class="nav-item" data-view="pipeline" data-scope="library" aria-label="生产管线">
-            <span class="nav-number">04</span><span class="nav-copy"><strong>生产管线</strong><small>PIPELINE</small></span>
+          <button class="nav-item" data-view="person" data-scope="library" aria-controls="personView" aria-label="我的记忆">
+            <span class="nav-number">04</span><span class="nav-copy"><strong>我的记忆</strong><small>PERSONAL</small></span>
           </button>
-          <button class="nav-item" data-view="health" data-scope="library" aria-label="健康中心">
-            <span class="nav-number">05</span><span class="nav-copy"><strong>健康中心</strong><small>HEALTH</small></span>
-          </button>
-          <button class="nav-item" data-view="person" data-scope="library" aria-controls="personView" aria-label="关于我">
-            <span class="nav-number">06</span><span class="nav-copy"><strong>关于我</strong><small>PERSONAL</small></span>
-          </button>
+          <div class="nav-divider" role="separator"><span>管理</span></div>
           <details class="nav-group" id="libraryNavGroup">
-            <summary class="nav-group-toggle" aria-label="展开全部分类"><span class="nav-number">07</span><span class="nav-copy"><strong>全部分类</strong><small>LIBRARY</small></span><span class="nav-chevron" aria-hidden="true">⌄</span></summary>
+            <summary class="nav-group-toggle" aria-label="展开系统功能"><span class="nav-number">••</span><span class="nav-copy"><strong>系统</strong><small>TOOLS &amp; SETTINGS</small></span><span class="nav-chevron" aria-hidden="true">⌄</span></summary>
             <div class="nav-group-items">
-              <button class="nav-item" data-view="library" data-scope="projects" aria-label="项目"><span>项目</span></button>
-              <button class="nav-item" data-view="library" data-scope="knowledge" aria-label="知识库"><span>知识库</span></button>
-              <button class="nav-item" data-view="library" data-scope="content" aria-label="内容"><span>内容</span></button>
-              <button class="nav-item" data-view="library" data-scope="prompts" aria-label="提示词"><span>提示词</span></button>
-              <button class="nav-item" data-view="library" data-scope="business" aria-label="商业"><span>商业</span></button>
-              <button class="nav-item" data-view="library" data-scope="skills" aria-label="Skills"><span>Skills</span></button>
-              <button class="nav-item" data-view="library" data-scope="all" aria-label="全部文件"><span>全部文件</span></button>
+              <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="today" aria-label="记忆管理"><span>记忆管理</span></button>
+              <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="search" aria-label="记忆搜索"><span>记忆搜索</span></button>
+              <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="inbox" aria-label="记忆收件箱"><span>记忆收件箱</span></button>
+              <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="notes" aria-label="随手记"><span>随手记</span></button>
+              <button class="nav-item" id="systemPipelineNav" data-view="pipeline" data-scope="library" aria-label="生产管线"><span>生产管线</span></button>
+              <button class="nav-item" data-view="atlas" data-scope="library" aria-label="关系探索"><span>关系探索</span></button>
+              <button class="nav-item" data-view="health" data-scope="library" aria-label="健康中心"><span>健康中心</span></button>
+              <button class="nav-item" data-view="memory" data-scope="library" data-memory-tab-target="settings" aria-label="设置与备份"><span>设置与备份</span></button>
+              <button class="nav-item" data-view="library" data-scope="all" aria-label="原始文件"><span>原始文件</span></button>
             </div>
           </details>
         </nav>
@@ -81,17 +78,16 @@
             <kbd id="searchShortcut">⌘ K</kbd>
           </label>
           <div class="filter-row" id="filterRow" aria-label="内容范围">
-            <button class="filter-pill is-active" data-scope="library" aria-pressed="true">精选</button>
             <button class="filter-pill" data-scope="projects" aria-pressed="false">项目</button>
-            <button class="filter-pill" data-scope="knowledge" aria-pressed="false">知识卡</button>
+            <button class="filter-pill is-active" data-scope="knowledge" aria-pressed="true">知识</button>
+            <button class="filter-pill" data-scope="all" aria-pressed="false">全部来源</button>
             <details class="filter-more" id="filterMore">
               <summary class="filter-more-toggle">更多 <span aria-hidden="true">⌄</span></summary>
               <div class="filter-more-menu">
-                <button class="filter-pill" data-scope="content" aria-pressed="false">内容</button>
-                <button class="filter-pill" data-scope="prompts" aria-pressed="false">提示词</button>
-                <button class="filter-pill" data-scope="business" aria-pressed="false">商业</button>
-                <button class="filter-pill" data-scope="skills" aria-pressed="false">Skill</button>
-                <button class="filter-pill" data-scope="all" aria-pressed="false">全部文件</button>
+                <button class="filter-pill" data-scope="content" data-conditional-scope aria-pressed="false">内容</button>
+                <button class="filter-pill" data-scope="prompts" data-conditional-scope aria-pressed="false">提示词</button>
+                <button class="filter-pill" data-scope="business" data-conditional-scope aria-pressed="false">商业</button>
+                <button class="filter-pill" data-scope="skills" data-conditional-scope aria-pressed="false">Skill</button>
               </div>
             </details>
           </div>
@@ -103,7 +99,7 @@
         <div class="dashboard-view" id="overviewView">
           <section class="focus-section">
             <div class="section-heading">
-              <div><h2>当前项目</h2></div>
+              <div><span class="section-kicker">CURRENT FOCUS</span><h2>从这里继续</h2></div>
               <button class="text-button" id="manualRefresh">同步 ↻</button>
             </div>
             <article class="focus-card" id="focusCard">
@@ -113,12 +109,12 @@
           <div id="pipelinePreview" hidden></div>
           <section class="cards-section">
             <div class="section-heading">
-              <div><h2>最近</h2></div>
-              <div class="section-actions"><span class="result-count" id="overviewResultCount">读取中</span><button class="text-button" id="viewAllCards" type="button">查看全部</button></div>
+              <div><span class="section-kicker">RECENT CHANGES</span><h2>最近更新</h2></div>
+              <div class="section-actions"><span class="result-count" id="overviewResultCount">读取中</span><button class="text-button" id="viewAllCards" type="button">进入知识</button></div>
             </div>
             <div class="card-grid" id="overviewCardGrid"></div>
           </section>
-          <section class="video-showcase-section">
+          <section class="video-showcase-section" id="videoShowcaseSection" hidden>
             <div class="section-heading">
               <div><h2>视频</h2></div>
               <span class="result-count" id="videoResultCount">读取中</span>
@@ -164,12 +160,13 @@
         <section class="dashboard-view" id="libraryView" hidden>
           <section class="cards-section library-cards-section">
             <div class="section-heading">
-              <div><span class="section-kicker">KNOWLEDGE LIBRARY</span><h2 id="cardsTitle">知识库</h2></div>
+              <div><span class="section-kicker">STRUCTURED LIBRARY</span><h2 id="cardsTitle">知识</h2><p class="section-description" id="cardsDescription">按主题组织可复用结论，原始记录保留为来源。</p></div>
               <span class="result-count" id="resultCount">读取中</span>
             </div>
+            <div class="knowledge-collections" id="knowledgeCollections" hidden></div>
             <div class="card-grid" id="cardGrid"></div>
             <div class="load-more-row" id="loadMoreRow" hidden><button class="load-more-button" id="loadMore" type="button">加载更多</button></div>
-            <div class="empty-state" id="emptyState" hidden><strong>没有找到匹配内容</strong><p>换一个关键词或清除筛选条件。</p><button class="ghost-button inline-ghost" data-clear-filters>清除条件</button></div>
+            <div class="empty-state" id="emptyState" hidden><strong id="emptyStateTitle">没有找到匹配内容</strong><p id="emptyStateCopy">换一个关键词或清除筛选条件。</p><button class="ghost-button inline-ghost" data-clear-filters>清除条件</button></div>
           </section>
         </section>
 
