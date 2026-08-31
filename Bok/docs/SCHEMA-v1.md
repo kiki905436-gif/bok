@@ -22,7 +22,9 @@ Project Context → Business Scenario → Operational Loop → Operational Actio
 06-Business/Operational-Ontology.md
 ```
 
-`Project.md` 是项目基线索引，记录项目上下文、源会话数量、已物化闭环数量和场景链接；单个闭环文件继续承载可执行流程和证据。`Operational-Ontology.md` 是所有项目的重建式入口。每个闭环成功写入后，Bok 必须同步重建当前项目基线、全局入口、两套检索索引和 `.bok/state/operational-ontology/projection.json` 图谱投影；其中 `.bok` 文件可随时丢弃重建，不是事实源。批量提炼中断时，断点状态保存在 `.bok/state/operational-batches/`，它只用于续跑。
+`Project.md` 是项目基线索引，记录项目上下文、已识别源会话数、已用于闭环取证的去重会话数、取证覆盖率、已物化闭环数量和场景链接；单个闭环文件继续承载可执行流程和证据。`Operational-Ontology.md` 是所有项目的重建式入口。每个闭环成功写入后，Bok 必须同步重建当前项目基线、全局入口、两套检索索引和 `.bok/state/operational-ontology/projection.json` 图谱投影；其中 `.bok` 文件可随时丢弃重建，不是事实源。批量提炼中断时，断点状态保存在 `.bok/state/operational-batches/`，它只用于续跑。
+
+Project Context frontmatter 的 `recognized_session_count`、`evidence_session_count` 与 `evidence_coverage` 分别表示项目已识别会话总量、被至少一个闭环引用的去重会话量及两者比值。覆盖率是提炼范围证据，不代表闭环已经通过业务验证。
 
 图谱投影只允许由 Project Context、Business Scenario、Business Object、Operational Action、Verification Gate 和 Source Conversation 构成，并使用 `contains / operates-on / has-action / verified-by / evidenced-by` 真实关系。禁止再把所有 Markdown 按共享标签补边冒充知识图谱。
 

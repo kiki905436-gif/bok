@@ -92,6 +92,8 @@
 
 ### `POST /operations/scenarios/discover`
 
+场景发现会先把目标项目的全部已匹配会话切成有界批次，分别发现候选业务结果，再进行一次项目级语义合并。响应中的 `source_session_count` 是本次实际遍历的会话总数，`discovery_batch_count` 是发现批次数；不能再用单次提示词字符上限静默截断项目历史。
+
 管理员入口。使用配置的低成本 Codex CLI 模型，在项目内把会话聚类为可形成闭环的业务场景。它只返回候选，不写正式闭环。
 
 ### `POST /operations/loop/extract`
@@ -112,7 +114,7 @@
 
 `source_refs` 可选；场景发现已经选出会话时应显式传入，保证提炼使用同一证据集。省略时才在项目边界内按 `query` 检索。提炼过程不会自动把结果标为已验证：存在缺口或冲突时状态为 `needs_evidence`，否则为 `draft`。真实业务执行和回读验收是进入 `validated` 的必要条件。
 
-CLI 额外提供 `bok operations compile` 批量编排入口：它过滤临时目录和容器目录，以项目为单位发现多个场景，逐场景提炼，并在 `.bok/state/operational-batches/` 保存可续跑状态。可用 `--project` 限定项目、`--max-scenarios` 控制每项目场景数、`--dry-run` 只检查项目范围。已存在的闭环默认跳过，`--force` 才重新提炼。
+CLI 额外提供 `bok operations compile` 批量编排入口：它过滤临时目录和容器目录，以项目为单位分块遍历全部匹配会话、发现并合并多个场景，逐场景提炼，并在 `.bok/state/operational-batches/` 保存可续跑状态。可用 `--project` 限定项目、`--max-scenarios` 控制每项目场景数、`--dry-run` 只检查项目范围。已存在的闭环默认跳过，`--force` 才重新提炼。
 
 每个闭环完成后会立即执行 Ontology Publication：重建项目 `Project.md`、全局 `Operational-Ontology.md`、默认/全量检索索引和带类型关系的知识图谱。任何一步失败时，该次提炼不返回完成。`bok operations projection` 可读取当前投影；`bok operations rebuild` 可从 Markdown 事实源全量重建；首次迁移可显式使用 `bok operations rebuild --purge-legacy`，该操作先备份再清理旧经验卡、旧 embedding 数据并重建全部投影。
 
