@@ -133,7 +133,6 @@ const elements = {
   emptyStateTitle: $("#emptyStateTitle"),
   emptyStateCopy: $("#emptyStateCopy"),
   atlasStage: $("#atlasStage"),
-  atlasFlow: $("#atlasFlow"),
   knowledgeGraph: $("#knowledgeGraph"),
   atlasStats: $("#atlasStats"),
   atlasLegend: $("#atlasLegend"),
@@ -2625,6 +2624,8 @@ function atlasViewNode(source, x, y, options = {}) {
     fixed: true,
     clusterKind: options.clusterKind || "",
     isBusinessDetail: Boolean(options.isBusinessDetail),
+    labelPlacement: options.labelPlacement || "below",
+    markerText: options.markerText || "",
   };
 }
 
@@ -2643,39 +2644,6 @@ function atlasSortBusinessDetails(items, kind) {
     }
     return String(first.label).localeCompare(String(second.label), "zh-CN");
   });
-}
-
-function atlasCleanEvidenceText(value = "") {
-  return stripMarkdown(String(value)
-    .replace(/\s*_?\(来源：[^)]*\)_?/gu, "")
-    .replace(/^\s*来源：.*$/gmu, ""))
-    .trim();
-}
-
-function atlasSectionSummary(text, titles, limit = 220) {
-  const summary = atlasCleanEvidenceText(sectionLines(text, titles).join("\n"));
-  if (summary.length <= limit) return summary;
-  return `${summary.slice(0, limit - 1)}…`;
-}
-
-function atlasScenarioNarrative(scenario) {
-  const path = String(scenario?.path || scenario?.document_path || "");
-  const record = state.files.find((item) => item.path === path);
-  const text = String(record?.text || "");
-  const preconditions = sectionList(text, ["前置条件"])
-    .map((item) => atlasCleanEvidenceText(item))
-    .filter(Boolean)
-    .slice(0, 4);
-  return {
-    trigger: atlasSectionSummary(text, ["触发条件"], 240),
-    outcome: atlasSectionSummary(text, ["业务结果"], 280),
-    preconditions,
-  };
-}
-
-function atlasCompactText(value = "", limit = 120) {
-  const text = atlasCleanEvidenceText(value);
-  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
 }
 
 function buildOntologyAtlas(projection, width, height, focusId = "") {
@@ -2699,10 +2667,50 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   scenarios.forEach((scenario) => scenarioDetails.set(String(scenario.id), atlasScenarioDetails(scenario, sourceNodes, sourceEdges)));
 
   if (focusedScenario) {
-    // The focused experience is rendered as a semantic DOM flow below. Keep the
-    // canvas model intentionally small so unrelated projects and scenarios do not
-    // reserve invisible space or pull the selected process off screen.
-    addNode(atlasViewNode(focusedScenario, width / 2, height / 2, { radius: 12 }));
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const compactFocus = width < 480;
+    const detailNodes = scenarioDetails.get(String(focusedScenario.id)) || [];
+    const detailIds = new Set(detailNodes.map((node) => String(node.id)));
+    const radiusX = compactFocus ? [Math.min(116, width * 0.31), Math.min(164, width * 0.44)] : [Math.min(208, width * 0.25), Math.min(286, width * 0.35)];
+    const radiusY = compactFocus ? [250, 410] : [174, 276];
+    const sectors = [
+      { kind: "action", start: 200, end: 335, label: "顺序动作", lane: { x: centerX, y: 42 } },
+      { kind: "business-object", start: 340, end: 385, label: "业务对象", lane: { x: width - (compactFocus ? 54 : 78), y: centerY - (compactFocus ? 150 : 112) } },
+      { kind: "verification-gate", start: 40, end: 145, label: "验证门", lane: { x: centerX, y: height - 30 } },
+      { kind: "source", start: 155, end: 195, label: "来源会话", lane: { x: compactFocus ? 54 : 72, y: centerY - (compactFocus ? 138 : 92) } },
+    ];
+    addNode(atlasViewNode(focusedScenario, centerX, centerY, { radius: 21, labelPlacement: "below" }));
+    sectors.forEach((sector) => {
+      const members = atlasSortBusinessDetails(detailNodes.filter((node) => node.kind === sector.kind), sector.kind);
+      if (!members.length) return;
+      lanes.push({ ...sector.lane, label: `${sector.label} · ${members.length}`, kind: sector.kind });
+      members.forEach((member, index) => {
+        const progress = (index + 0.5) / members.length;
+        const angle = (sector.start + (sector.end - sector.start) * progress) * Math.PI / 180;
+        const ring = index % 2;
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const labelPlacement = Math.abs(cosine) > 0.52 ? (cosine > 0 ? "right" : "left") : (sine > 0 ? "below" : "above");
+        addNode(atlasViewNode(
+          member,
+          centerX + cosine * radiusX[ring],
+          centerY + sine * radiusY[ring],
+          {
+            radius: sector.kind === "business-object" ? 9 : sector.kind === "source" ? 6.5 : 8,
+            isBusinessDetail: true,
+            labelPlacement,
+            markerText: sector.kind === "action" ? String(index + 1).padStart(2, "0") : "",
+          },
+        ));
+      });
+    });
+    sourceEdges.forEach((edge) => {
+      const source = String(edge.source);
+      const target = String(edge.target);
+      if (source === String(focusedScenario.id) && detailIds.has(target)) addEdge(source, target, edge.kind);
+      else if (detailIds.has(source) && detailIds.has(target)) addEdge(source, target, edge.kind);
+    });
   } else if (narrow) {
     if (ontology) addNode(atlasViewNode(ontology, width / 2, 42));
     let cursorY = 112;
@@ -2789,51 +2797,6 @@ function paperScrapPath(context, width, height, seed = 0) {
   context.closePath();
 }
 
-function renderAtlasFlow(graph) {
-  const scenario = graph.focus;
-  if (!scenario) {
-    elements.atlasFlow.hidden = true;
-    elements.atlasFlow.innerHTML = "";
-    return;
-  }
-  const narrative = atlasScenarioNarrative(scenario);
-  const project = (state.ontologyGraph?.nodes || []).find((node) => node.kind === "project" && node.project_id === scenario.project_id);
-  const actions = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "action"), "action");
-  const objects = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "business-object"), "business-object");
-  const gates = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "verification-gate"), "verification-gate");
-  const sources = graph.detailNodes.filter((node) => node.kind === "source");
-  const status = ATLAS_STATUS_LABELS[scenario.status] || scenario.status || "待确认";
-  const preconditions = narrative.preconditions.length
-    ? narrative.preconditions
-    : ["该场景尚未提取出可独立展示的前置条件，请打开场景文档核对。"];
-  elements.atlasFlow.innerHTML = `
-    <article class="atlas-flow-hero">
-      <div><span>${escapeHtml(project?.label || scenario.project_id || "业务项目")} · 业务闭环</span><h3>${escapeHtml(scenario.label)}</h3></div>
-      <strong>${escapeHtml(status)}</strong>
-    </article>
-    <div class="atlas-flow-entry">
-      <section class="atlas-flow-context is-trigger"><span>何时触发</span><p>${escapeHtml(narrative.trigger || "触发条件尚待从场景证据中补齐。")}</p></section>
-      <section class="atlas-flow-context is-precondition"><span>执行前确认</span><ul>${preconditions.map((item) => `<li>${escapeHtml(atlasCompactText(item, 150))}</li>`).join("")}</ul></section>
-    </div>
-    <section class="atlas-flow-section is-actions">
-      <header><div><span>01</span><strong>执行路径</strong></div><small>${actions.length} 个顺序动作</small></header>
-      <ol class="atlas-flow-steps">${actions.map((action, index) => `<li><span>${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(action.label || `步骤 ${index + 1}`)}</strong><p>${escapeHtml(atlasCompactText(action.description || "", 150))}</p></div></li>`).join("")}</ol>
-    </section>
-    <section class="atlas-flow-section is-objects">
-      <header><div><span>02</span><strong>本流程操作的业务对象</strong></div><small>${objects.length} 个对象</small></header>
-      <div class="atlas-flow-card-grid">${objects.map((object) => `<article><i></i><p>${escapeHtml(atlasCompactText(object.label, 180))}</p></article>`).join("")}</div>
-    </section>
-    <section class="atlas-flow-section is-gates">
-      <header><div><span>03</span><strong>完成前必须通过的验证门</strong></div><small>${gates.length} 个验证门</small></header>
-      <div class="atlas-flow-gates">${gates.map((gate) => `<article><span>✓</span><p>${escapeHtml(atlasCompactText(gate.label, 190))}</p></article>`).join("")}</div>
-    </section>
-    <footer class="atlas-flow-outcome">
-      <div><span>业务结果</span><strong>${escapeHtml(narrative.outcome || scenario.label)}</strong></div>
-      <small>${sources.length} 个来源会话支撑 · ${escapeHtml(status)}</small>
-    </footer>`;
-  elements.atlasFlow.hidden = false;
-}
-
 function renderAtlas() {
   if (state.atlasFrame) cancelAnimationFrame(state.atlasFrame);
   state.atlasFrame = null;
@@ -2844,11 +2807,9 @@ function renderAtlas() {
   const graph = hasProjection
     ? buildOntologyAtlas(state.ontologyGraph, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight, state.atlasFocusId)
     : buildAtlas(records, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight);
-  const flowMode = Boolean(graph.focus);
-  elements.atlasEmpty.hidden = graph.nodes.length > 0 || flowMode;
-  elements.knowledgeGraph.hidden = graph.nodes.length === 0 || flowMode;
+  elements.atlasEmpty.hidden = graph.nodes.length > 0;
+  elements.knowledgeGraph.hidden = graph.nodes.length === 0;
   renderAtlasNavigator(graph, hasProjection);
-  renderAtlasFlow(graph);
   if (!graph.nodes.length) return;
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
   state.atlasLanes = graph.lanes || [];
@@ -2862,7 +2823,7 @@ function renderAtlas() {
   elements.knowledgeGraph.dataset.expandedNodes = String(graph.expandedNodeCount || 0);
   elements.atlasStage.dataset.atlasMode = graph.mode || "network";
   elements.knowledgeGraph.setAttribute("aria-label", graph.focus
-    ? `${graph.focus.label}：已切换为可读业务闭环流程`
+    ? `${graph.focus.label}：真实动作、业务对象、验证门和来源的圆形关系图`
     : `业务本体总图：${graph.fullNodeCount || graph.nodes.length} 个本体节点`);
   const focusCounts = graph.focus ? Object.fromEntries(ATLAS_DETAIL_KINDS.map((kind) => [kind, graph.detailNodes.filter((node) => node.kind === kind).length])) : {};
   elements.atlasStats.innerHTML = hasProjection
@@ -2874,7 +2835,7 @@ function renderAtlas() {
     ? new Map(ATLAS_DETAIL_KINDS.map((kind) => [kind, focusCounts[kind] || 0]).filter(([, count]) => count > 0))
     : graph.legendCounts || graph.nodes.reduce((result, node) => result.set(node.kind, (result.get(node.kind) || 0) + 1), new Map());
   elements.atlasLegend.innerHTML = [...counts.entries()].map(([key, count]) => `<span><i style="background:${ATLAS_COLORS[key] || "#168d7c"}"></i>${escapeHtml(ATLAS_KIND_LABELS[key] || key)} ${count}</span>`).join("");
-  if (!flowMode) drawAtlas(0);
+  drawAtlas(0);
 }
 
 function renderAtlasNavigator(graph, hasProjection) {
@@ -2925,6 +2886,7 @@ function focusAtlasScenario(identifier) {
   state.atlasSelectedPath = String(scenario.id);
   renderAtlas();
   elements.atlasNavigator.scrollTop = 0;
+  elements.atlasView.scrollIntoView({ behavior: "auto", block: "start" });
 }
 
 function showAtlasOverview() {
@@ -3065,16 +3027,30 @@ function atlasLabelLines(value, kind) {
   return [text.slice(0, limit), `${text.slice(limit, limit * 2 - 1)}…`];
 }
 
-function drawAtlasFixedLabel(context, node, active, selected, canvasWidth) {
+function drawAtlasFixedLabel(context, node, active, selected, canvasWidth, canvasHeight) {
   const lines = atlasLabelLines(node.record.title, node.kind);
   context.font = `${active || selected ? 10.5 : 9.5}px "Microsoft YaHei UI", sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
   const width = Math.max(...lines.map((line) => context.measureText(line).width)) + 16;
   const height = lines.length * 14 + 10;
-  const centerX = Number.isFinite(canvasWidth) ? Math.max(width / 2 + 5, Math.min(canvasWidth - width / 2 - 5, node.x)) : node.x;
+  const placement = node.labelPlacement || "below";
+  let centerX = node.x;
+  let centerY = node.y + node.radius + 9 + height / 2;
+  if (placement === "above") centerY = node.y - node.radius - 9 - height / 2;
+  if (placement === "right") centerX = node.x + node.radius + 10 + width / 2;
+  if (placement === "left") centerX = node.x - node.radius - 10 - width / 2;
+  if (placement === "right" || placement === "left") centerY = node.y;
+  if (Number.isFinite(canvasWidth)) centerX = Math.max(width / 2 + 5, Math.min(canvasWidth - width / 2 - 5, centerX));
+  if (Number.isFinite(canvasHeight)) centerY = Math.max(height / 2 + 48, Math.min(canvasHeight - height / 2 - 16, centerY));
   const left = centerX - width / 2;
-  const top = node.y + node.radius + 9;
+  const top = centerY - height / 2;
+  context.strokeStyle = active || selected ? `${node.color}aa` : "rgba(63,78,78,.18)";
+  context.lineWidth = active || selected ? 1.2 : 0.65;
+  context.beginPath();
+  context.moveTo(node.x, node.y);
+  context.lineTo(centerX, centerY);
+  context.stroke();
   context.fillStyle = active || selected ? "rgba(255,255,255,.98)" : "rgba(255,255,255,.9)";
   context.strokeStyle = active || selected ? `${node.color}99` : "rgba(63,78,78,.16)";
   context.lineWidth = active || selected ? 1.4 : 0.8;
@@ -3153,8 +3129,15 @@ function drawAtlas(time = 0) {
     context.strokeStyle = "#fffaf0";
     context.lineWidth = active ? 3 : 1.7;
     context.beginPath(); context.arc(node.x, node.y, active ? node.radius + 2 : node.radius, 0, Math.PI * 2); context.fill(); context.stroke();
+    if (node.markerText) {
+      context.fillStyle = "#ffffff";
+      context.font = '700 6.5px "SFMono-Regular", Consolas, monospace';
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(node.markerText, node.x, node.y + 0.5);
+    }
     if (state.atlasFixedLayout) {
-      drawAtlasFixedLabel(context, node, active, selected, width);
+      drawAtlasFixedLabel(context, node, active, selected, width, height);
     } else if (node.degree >= 4 || active || selected) {
       context.font = `${active || selected ? 10 : 8.5}px "Microsoft YaHei UI", sans-serif`;
       context.textAlign = "center";

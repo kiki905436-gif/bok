@@ -180,13 +180,12 @@
 
         <section class="atlas-view" id="atlasView" hidden aria-label="知识库全景">
           <div class="atlas-toolbar">
-            <div><span class="section-kicker">OPERATIONAL ONTOLOGY</span><h2>业务本体地图</h2><p>默认展示项目与场景总图；点击场景后切换为可执行闭环，直接阅读触发条件、顺序动作、业务对象、验证门和结果。</p></div>
+            <div><span class="section-kicker">OPERATIONAL ONTOLOGY</span><h2>业务本体地图</h2><p>默认展示项目与场景总图；点击场景后以它为中心，按圆形关系展开真实动作、业务对象、验证门和来源，所有节点直接显示业务名称。</p></div>
             <div class="atlas-stats" id="atlasStats"><span><strong>0</strong> 节点</span><span><strong>0</strong> 关联</span></div>
           </div>
           <div class="atlas-layout">
             <div class="atlas-stage" id="atlasStage">
               <canvas id="knowledgeGraph" aria-label="动态知识关系图"></canvas>
-              <div class="atlas-flow" id="atlasFlow" aria-live="polite" hidden></div>
               <div class="atlas-orbit atlas-orbit-one" aria-hidden="true"></div><div class="atlas-orbit atlas-orbit-two" aria-hidden="true"></div>
               <div class="atlas-legend" id="atlasLegend"></div><div class="atlas-tooltip" id="atlasTooltip" hidden></div>
               <div class="atlas-controls" aria-label="图谱视图控制"><button id="atlasZoomOut" type="button" aria-label="缩小图谱">−</button><button id="atlasReset" type="button">适应</button><button id="atlasZoomIn" type="button" aria-label="放大图谱">＋</button></div>
