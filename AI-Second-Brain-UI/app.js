@@ -48,6 +48,7 @@ const state = {
   atlasNodes: [],
   atlasEdges: [],
   atlasGroups: [],
+  atlasGlobe: null,
   atlasPointer: { x: -9999, y: -9999 },
   atlasSelectedPath: null,
   atlasFocusId: null,
@@ -2626,6 +2627,11 @@ function atlasViewNode(source, x, y, options = {}) {
     isBusinessDetail: Boolean(options.isBusinessDetail),
     labelPlacement: options.labelPlacement || "below",
     markerText: options.markerText || "",
+    globeDepth: Number.isFinite(options.globeDepth) ? options.globeDepth : null,
+    globeSurface: Boolean(options.globeSurface),
+    labelOffset: Number(options.labelOffset || 0),
+    labelCenterX: Number.isFinite(options.labelCenterX) ? options.labelCenterX : null,
+    labelCenterY: Number.isFinite(options.labelCenterY) ? options.labelCenterY : null,
   };
 }
 
@@ -2646,6 +2652,26 @@ function atlasSortBusinessDetails(items, kind) {
   });
 }
 
+function atlasRadialLabelPlacement(angle) {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  if (Math.abs(cosine) > 0.5) return cosine > 0 ? "right" : "left";
+  return sine > 0 ? "below" : "above";
+}
+
+function atlasGlobePoint(globe, longitude, latitude) {
+  const horizontal = Math.sin(longitude) * Math.cos(latitude);
+  const vertical = Math.sin(latitude);
+  const depth = Math.cos(longitude) * Math.cos(latitude);
+  return {
+    x: globe.x + horizontal * globe.radius,
+    y: globe.y + vertical * globe.radius,
+    depth,
+    scale: 0.78 + Math.max(0, Math.min(1, (depth + 1) / 2)) * 0.34,
+    angle: Math.atan2(vertical, horizontal),
+  };
+}
+
 function buildOntologyAtlas(projection, width, height, focusId = "") {
   const sourceNodes = Array.isArray(projection?.nodes) ? projection.nodes : [];
   const sourceEdges = Array.isArray(projection?.edges) ? projection.edges : [];
@@ -2660,7 +2686,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   const scenarioDetails = new Map();
   const lanes = [];
   let worldHeight = height;
-  const narrow = width < 620;
+  let globe = null;
   const addNode = (node) => { if (node) nodeSources.push(node); };
   const addEdge = (source, target, kind) => viewEdges.push({ source: String(source), target: String(target), kind });
 
@@ -2711,37 +2737,81 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
       if (source === String(focusedScenario.id) && detailIds.has(target)) addEdge(source, target, edge.kind);
       else if (detailIds.has(source) && detailIds.has(target)) addEdge(source, target, edge.kind);
     });
-  } else if (narrow) {
-    if (ontology) addNode(atlasViewNode(ontology, width / 2, 42));
-    let cursorY = 112;
-    projects.forEach((project) => {
-      const projectScenarios = scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
-      addNode(atlasViewNode(project, width / 2, cursorY));
-      if (ontology) addEdge(ontology.id, project.id, "contains");
-      projectScenarios.forEach((scenario, scenarioIndex) => {
-        const x = width * (scenarioIndex % 2 === 0 ? 0.29 : 0.71);
-        const y = cursorY + 66 + Math.floor(scenarioIndex / 2) * 68;
-        addNode(atlasViewNode(scenario, x, y, { radius: 12 }));
-        addEdge(project.id, scenario.id, "contains");
-      });
-      cursorY += 108 + Math.ceil(projectScenarios.length / 2) * 68;
-    });
-    worldHeight = Math.max(height, cursorY + 24);
   } else {
-    if (ontology) addNode(atlasViewNode(ontology, width / 2, 48));
-    const laneWidth = width / Math.max(1, projects.length);
+    const compactOverview = width < 620;
+    const centerX = width / 2;
+    const centerY = height / 2 + (compactOverview ? 14 : 18);
+    const globeRadius = Math.min(width * (compactOverview ? 0.39 : 0.34), height * 0.39, compactOverview ? 174 : 310);
+    globe = { x: centerX, y: centerY, radius: globeRadius };
+    const projectScenarios = new Map(projects.map((project) => [
+      String(project.project_id),
+      scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN")),
+    ]));
+    const projectAnchors = [
+      { longitude: -0.28, latitude: -0.06 },
+      { longitude: -1.18, latitude: 0.52 },
+      { longitude: 1.16, latitude: -0.42 },
+    ];
+
+    if (ontology) addNode(atlasViewNode(ontology, centerX, centerY, {
+      radius: 22,
+      labelPlacement: "below",
+      globeDepth: 1.2,
+    }));
     projects.forEach((project, projectIndex) => {
-      const laneCenter = laneWidth * (projectIndex + 0.5);
-      const projectScenarios = scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
-      addNode(atlasViewNode(project, laneCenter, 122));
+      const members = projectScenarios.get(String(project.project_id)) || [];
+      const anchor = projectAnchors[projectIndex] || {
+        longitude: -1.1 + projectIndex * 0.72,
+        latitude: projectIndex % 2 === 0 ? -0.36 : 0.36,
+      };
+      const projectPoint = atlasGlobePoint(globe, anchor.longitude, anchor.latitude);
+      addNode(atlasViewNode(
+        project,
+        projectPoint.x,
+        projectPoint.y,
+        {
+          radius: 15 * projectPoint.scale,
+          labelPlacement: atlasRadialLabelPlacement(projectPoint.angle),
+          globeDepth: projectPoint.depth,
+          globeSurface: true,
+        },
+      ));
       if (ontology) addEdge(ontology.id, project.id, "contains");
-      projectScenarios.forEach((scenario, scenarioIndex) => {
-        const x = laneCenter + (scenarioIndex % 2 === 0 ? -laneWidth * 0.21 : laneWidth * 0.21);
-        const y = 194 + Math.floor(scenarioIndex / 2) * 58;
-        addNode(atlasViewNode(scenario, x, y, { radius: 11 }));
+      const spread = members.length > 10 ? 1.48 : members.length > 4 ? 0.82 : 0.38;
+      members.forEach((scenario, scenarioIndex) => {
+        const progress = Math.sqrt((scenarioIndex + 1) / Math.max(1, members.length));
+        const spiralAngle = scenarioIndex * 2.399963 + projectIndex * 0.78;
+        const longitude = anchor.longitude + Math.cos(spiralAngle) * spread * progress;
+        const latitude = Math.max(-1.18, Math.min(1.18, anchor.latitude + Math.sin(spiralAngle) * spread * progress * 0.7));
+        const point = atlasGlobePoint(globe, longitude, latitude);
+        addNode(atlasViewNode(
+          scenario,
+          point.x,
+          point.y,
+          {
+            radius: 10.5 * point.scale,
+            labelPlacement: atlasRadialLabelPlacement(point.angle),
+            globeDepth: point.depth,
+            globeSurface: true,
+            labelOffset: scenarioIndex % 3 * 3,
+          },
+        ));
         addEdge(project.id, scenario.id, "contains");
       });
-      worldHeight = Math.max(worldHeight, 264 + Math.ceil(projectScenarios.length / 2) * 58);
+    });
+
+    const globeScenarioNodes = nodeSources.filter((node) => node.kind === "scenario").sort((first, second) => first.x - second.x);
+    const leftLabels = globeScenarioNodes.slice(0, Math.ceil(globeScenarioNodes.length / 2)).sort((first, second) => first.y - second.y);
+    const rightLabels = globeScenarioNodes.slice(Math.ceil(globeScenarioNodes.length / 2)).sort((first, second) => first.y - second.y);
+    [
+      { nodes: leftLabels, x: centerX - globeRadius - (compactOverview ? 34 : 68) },
+      { nodes: rightLabels, x: centerX + globeRadius + (compactOverview ? 34 : 68) },
+    ].forEach((column) => {
+      column.nodes.forEach((node, index) => {
+        const progress = column.nodes.length === 1 ? 0.5 : index / (column.nodes.length - 1);
+        node.labelCenterX = column.x;
+        node.labelCenterY = centerY - globeRadius * 0.94 + progress * globeRadius * 1.88;
+      });
     });
   }
 
@@ -2755,6 +2825,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
     detailNodes.forEach((node) => focusNodeIds.add(String(node.id)));
   }
 
+  if (globe) nodeSources.sort((first, second) => Number(first.globeDepth || 0) - Number(second.globeDepth || 0));
   const byId = new Map(nodeSources.map((node, index) => [node.id, index]));
   nodeSources.forEach((node) => { node.focusRelated = !focusedScenario || focusNodeIds.has(node.id); });
   const edges = viewEdges.map((edge) => ({
@@ -2775,6 +2846,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
     focus: focusedScenario,
     detailNodes,
     lanes,
+    globe,
     expandedNodeCount: detailNodes.length,
     worldHeight,
     legendCounts,
@@ -2813,6 +2885,7 @@ function renderAtlas() {
   if (!graph.nodes.length) return;
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
   state.atlasLanes = graph.lanes || [];
+  state.atlasGlobe = graph.globe || null;
   state.atlasFixedLayout = Boolean(graph.fixed);
   state.atlasSimulationAlpha = graph.fixed || state.reduceMotion ? 0 : 1;
   state.atlasLastTime = 0;
@@ -2940,9 +3013,13 @@ function atlasScreenToWorld(point, width, height) {
 }
 
 function atlasNodeAt(point, width, height) {
+  const worldPoint = atlasScreenToWorld(point, width, height);
   return state.atlasNodes.find((node) => {
     const screen = atlasWorldToScreen(node, width, height);
-    return Math.hypot(screen.x - point.x, screen.y - point.y) <= node.radius * state.atlasCamera.scale + 8;
+    const insideNode = Math.hypot(screen.x - point.x, screen.y - point.y) <= node.radius * state.atlasCamera.scale + 8;
+    const box = node.labelBounds;
+    const insideLabel = box && worldPoint.x >= box.left && worldPoint.x <= box.right && worldPoint.y >= box.top && worldPoint.y <= box.bottom;
+    return insideNode || insideLabel;
   });
 }
 
@@ -3035,16 +3112,19 @@ function drawAtlasFixedLabel(context, node, active, selected, canvasWidth, canva
   const width = Math.max(...lines.map((line) => context.measureText(line).width)) + 16;
   const height = lines.length * 14 + 10;
   const placement = node.labelPlacement || "below";
-  let centerX = node.x;
-  let centerY = node.y + node.radius + 9 + height / 2;
-  if (placement === "above") centerY = node.y - node.radius - 9 - height / 2;
-  if (placement === "right") centerX = node.x + node.radius + 10 + width / 2;
-  if (placement === "left") centerX = node.x - node.radius - 10 - width / 2;
-  if (placement === "right" || placement === "left") centerY = node.y;
+  const labelGap = 9 + Number(node.labelOffset || 0);
+  const hasFixedLabelCenter = Number.isFinite(node.labelCenterX) && Number.isFinite(node.labelCenterY);
+  let centerX = hasFixedLabelCenter ? node.labelCenterX : node.x;
+  let centerY = hasFixedLabelCenter ? node.labelCenterY : node.y + node.radius + labelGap + height / 2;
+  if (!hasFixedLabelCenter && placement === "above") centerY = node.y - node.radius - labelGap - height / 2;
+  if (!hasFixedLabelCenter && placement === "right") centerX = node.x + node.radius + labelGap + width / 2;
+  if (!hasFixedLabelCenter && placement === "left") centerX = node.x - node.radius - labelGap - width / 2;
+  if (!hasFixedLabelCenter && (placement === "right" || placement === "left")) centerY = node.y;
   if (Number.isFinite(canvasWidth)) centerX = Math.max(width / 2 + 5, Math.min(canvasWidth - width / 2 - 5, centerX));
   if (Number.isFinite(canvasHeight)) centerY = Math.max(height / 2 + 48, Math.min(canvasHeight - height / 2 - 16, centerY));
   const left = centerX - width / 2;
   const top = centerY - height / 2;
+  node.labelBounds = { left, right: left + width, top, bottom: top + height };
   context.strokeStyle = active || selected ? `${node.color}aa` : "rgba(63,78,78,.18)";
   context.lineWidth = active || selected ? 1.2 : 0.65;
   context.beginPath();
@@ -3061,6 +3141,79 @@ function drawAtlasFixedLabel(context, node, active, selected, canvasWidth, canva
   context.stroke();
   context.fillStyle = "#172b2d";
   lines.forEach((line, index) => context.fillText(line, centerX, top + 8 + index * 14));
+}
+
+function drawAtlasGlobe(context, globe) {
+  if (!globe) return;
+  const { x, y, radius } = globe;
+  context.save();
+  context.globalAlpha = 1;
+  context.fillStyle = "rgba(8, 37, 39, 0.16)";
+  context.beginPath();
+  context.ellipse(x + radius * 0.08, y + radius * 0.94, radius * 0.76, radius * 0.12, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.save();
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.clip();
+  const sphere = context.createRadialGradient(
+    x - radius * 0.34,
+    y - radius * 0.38,
+    radius * 0.04,
+    x + radius * 0.12,
+    y + radius * 0.16,
+    radius * 1.06,
+  );
+  sphere.addColorStop(0, "#4f938c");
+  sphere.addColorStop(0.34, "#216764");
+  sphere.addColorStop(0.7, "#10494c");
+  sphere.addColorStop(1, "#062b30");
+  context.fillStyle = sphere;
+  context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+
+  context.lineWidth = 0.8;
+  context.strokeStyle = "rgba(205, 236, 228, 0.2)";
+  [-60, -30, 0, 30, 60].forEach((latitudeDegrees) => {
+    const latitude = latitudeDegrees * Math.PI / 180;
+    context.beginPath();
+    context.ellipse(x, y + Math.sin(latitude) * radius, Math.cos(latitude) * radius, Math.max(1, Math.cos(latitude) * radius * 0.2), 0, 0, Math.PI * 2);
+    context.stroke();
+  });
+  [-60, -30, 0, 30, 60].forEach((longitudeDegrees) => {
+    const longitude = longitudeDegrees * Math.PI / 180;
+    context.beginPath();
+    for (let step = 0; step <= 48; step += 1) {
+      const latitude = -Math.PI / 2 + Math.PI * step / 48;
+      const pointX = x + Math.sin(longitude) * Math.cos(latitude) * radius;
+      const pointY = y + Math.sin(latitude) * radius;
+      if (step === 0) context.moveTo(pointX, pointY);
+      else context.lineTo(pointX, pointY);
+    }
+    context.stroke();
+  });
+
+  const sheen = context.createRadialGradient(
+    x - radius * 0.38,
+    y - radius * 0.42,
+    0,
+    x - radius * 0.2,
+    y - radius * 0.24,
+    radius * 0.78,
+  );
+  sheen.addColorStop(0, "rgba(255,255,255,.26)");
+  sheen.addColorStop(0.48, "rgba(255,255,255,.04)");
+  sheen.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = sheen;
+  context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  context.restore();
+
+  context.strokeStyle = "rgba(12, 52, 55, 0.42)";
+  context.lineWidth = 1.4;
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.stroke();
+  context.restore();
 }
 
 function drawAtlas(time = 0) {
@@ -3090,6 +3243,7 @@ function drawAtlas(time = 0) {
   context.translate(width / 2 + state.atlasCamera.x, height / 2 + state.atlasCamera.y);
   context.scale(state.atlasCamera.scale, state.atlasCamera.scale);
   context.translate(-width / 2, -height / 2);
+  drawAtlasGlobe(context, state.atlasGlobe);
   (state.atlasLanes || []).forEach((lane) => {
     context.globalAlpha = 1;
     context.font = '650 10px "Microsoft YaHei UI", sans-serif';
@@ -3101,21 +3255,27 @@ function drawAtlas(time = 0) {
   state.atlasEdges.forEach((edge) => {
     const first = state.atlasNodes[edge.a]; const second = state.atlasNodes[edge.b];
     const active = persistentFocus ? edge.focusRelated : focusIndex < 0 || connected.has(edge.a) && connected.has(edge.b);
-    context.globalAlpha = active ? 1 : 0.06;
-    context.strokeStyle = active && persistentFocus ? `${second.color}9f` : edge.kind === "reference" ? "rgba(28,53,58,.34)" : "rgba(70,91,96,.18)";
-    context.lineWidth = active && persistentFocus ? 1.45 : edge.kind === "reference" ? 1.15 : 0.7;
-    context.setLineDash([]);
+    const edgeDepth = state.atlasGlobe ? (Number(first.globeDepth || 0) + Number(second.globeDepth || 0)) / 2 : 1;
+    const depthAlpha = state.atlasGlobe ? 0.22 + Math.max(0, Math.min(1, (edgeDepth + 1) / 2)) * 0.58 : 1;
+    context.globalAlpha = active ? depthAlpha : 0.06;
+    context.strokeStyle = state.atlasGlobe ? `${second.color}a8` : active && persistentFocus ? `${second.color}9f` : edge.kind === "reference" ? "rgba(28,53,58,.34)" : "rgba(70,91,96,.18)";
+    context.lineWidth = state.atlasGlobe ? 1.05 : active && persistentFocus ? 1.45 : edge.kind === "reference" ? 1.15 : 0.7;
+    context.setLineDash(state.atlasGlobe && edgeDepth < 0 ? [3, 4] : []);
     context.beginPath();
     context.moveTo(first.x, first.y);
     context.lineTo(second.x, second.y);
     context.stroke();
   });
   const labelBoxes = [];
+  context.setLineDash([]);
   state.atlasNodes.forEach((node, index) => {
     const active = index === hoveredIndex;
     const selected = index === selectedIndex;
     const focusRelated = persistentFocus ? node.focusRelated : focusIndex < 0 || connected.has(index);
-    context.globalAlpha = focusRelated ? 1 : 0.11;
+    const nodeDepthAlpha = state.atlasGlobe && node.globeSurface
+      ? 0.42 + Math.max(0, Math.min(1, (Number(node.globeDepth || 0) + 1) / 2)) * 0.58
+      : 1;
+    context.globalAlpha = focusRelated ? nodeDepthAlpha : 0.11;
     if (selected) {
       context.strokeStyle = "rgba(13,117,107,.88)";
       context.lineWidth = 2.2;
