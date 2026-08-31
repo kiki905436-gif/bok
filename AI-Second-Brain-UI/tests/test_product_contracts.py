@@ -102,7 +102,7 @@ class ProductContracts(unittest.TestCase):
             self.assertIn(route, html)
         self.assertIn('view: "overview"', source)
         self.assertNotIn("legacy-nav-routes", html)
-        self.assertIn('href="./polish.css?v=20260830-3"', html)
+        self.assertIn('href="./polish.css?v=20260831-1"', html)
         self.assertIn("UI-only visual layer", polish)
         self.assertIn('--desk-font-display: "Songti SC"', polish)
         self.assertIn("Information architecture v2", polish)
@@ -159,6 +159,33 @@ class ProductContracts(unittest.TestCase):
         self.assertIn("atlasCamera", source)
         self.assertIn('addEventListener("wheel"', source)
         self.assertIn("atlasNodeAt", source)
+
+    def test_operational_atlas_is_hierarchical_and_expands_one_scenario(self) -> None:
+        html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
+        source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
+        polish = (UI_ROOT / "polish.css").read_text(encoding="utf-8-sig")
+        for identifier in (
+            'id="atlasNavigatorTitle"',
+            'id="atlasProjectTree"',
+            'id="atlasScenarioInspector"',
+            'id="atlasBack"',
+            'id="atlasFocusTitle"',
+            'id="atlasFocusMeta"',
+            'id="atlasOpenFocus"',
+            'id="atlasNodeList"',
+        ):
+            self.assertIn(identifier, html)
+        self.assertIn('atlasFocusId: null', source)
+        self.assertIn('const focusedScenario = focus?.kind === "scenario" ? focus : null', source)
+        self.assertIn('`cluster:${focusedScenario.id}:${kind}`', source)
+        self.assertIn('function renderAtlasNavigator', source)
+        self.assertIn('function focusAtlasScenario', source)
+        self.assertIn('function showAtlasOverview', source)
+        self.assertIn('function drawAtlasFixedLabel', source)
+        self.assertIn('<strong>${graph.fullNodeCount}</strong> 完整本体', source)
+        self.assertIn('window.matchMedia("(max-width: 760px)").matches', source)
+        self.assertIn('grid-template-columns: minmax(0, 1fr) 320px', polish)
+        self.assertIn('@media (max-width: 620px)', polish)
 
     def test_bok_workspace_exposes_complete_safe_write_flow(self) -> None:
         html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")

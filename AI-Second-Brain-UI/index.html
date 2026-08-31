@@ -7,7 +7,7 @@
     <title>Boujoy知识库</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css?v=20260824-22" />
-    <link rel="stylesheet" href="./polish.css?v=20260830-3" />
+    <link rel="stylesheet" href="./polish.css?v=20260831-1" />
   </head>
   <body class="context-hidden">
     <div class="app-shell">
@@ -180,7 +180,7 @@
 
         <section class="atlas-view" id="atlasView" hidden aria-label="知识库全景">
           <div class="atlas-toolbar">
-            <div><h2>知识图谱</h2></div>
+            <div><span class="section-kicker">OPERATIONAL ONTOLOGY</span><h2>业务本体地图</h2><p>先看项目与场景，再进入一个场景查看动作、对象、验证门和来源。</p></div>
             <div class="atlas-stats" id="atlasStats"><span><strong>0</strong> 节点</span><span><strong>0</strong> 关联</span></div>
           </div>
           <div class="atlas-layout">
@@ -191,7 +191,18 @@
               <div class="atlas-controls" aria-label="图谱视图控制"><button id="atlasZoomOut" type="button" aria-label="缩小图谱">−</button><button id="atlasReset" type="button">适应</button><button id="atlasZoomIn" type="button" aria-label="放大图谱">＋</button></div>
               <div class="atlas-empty" id="atlasEmpty"><strong>连接知识库后生成全景</strong><p>项目、知识、内容和 Skill 会成为可探索节点。</p></div>
             </div>
-            <aside class="atlas-accessible"><h3>节点列表</h3><ul id="atlasNodeList"></ul></aside>
+            <aside class="atlas-navigator" aria-label="业务场景导航">
+              <div class="atlas-navigator-heading"><div><span>业务结构</span><strong id="atlasNavigatorTitle">全部项目</strong></div><button id="atlasOverview" type="button">总览</button></div>
+              <div class="atlas-project-tree" id="atlasProjectTree"></div>
+              <section class="atlas-scenario-inspector" id="atlasScenarioInspector" hidden>
+                <button class="atlas-back" id="atlasBack" type="button">← 返回项目结构</button>
+                <span class="section-kicker">SCENARIO DETAIL</span>
+                <h3 id="atlasFocusTitle"></h3>
+                <div class="atlas-focus-meta" id="atlasFocusMeta"></div>
+                <button class="atlas-open-focus" id="atlasOpenFocus" type="button">打开场景文档</button>
+                <ul class="atlas-node-list" id="atlasNodeList"></ul>
+              </section>
+            </aside>
           </div>
         </section>
 
@@ -349,6 +360,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=20260824-11" defer></script>
+    <script src="./app.js?v=20260831-1" defer></script>
   </body>
 </html>
