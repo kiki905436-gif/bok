@@ -3125,22 +3125,87 @@ function drawAtlasFixedLabel(context, node, active, selected, canvasWidth, canva
   const left = centerX - width / 2;
   const top = centerY - height / 2;
   node.labelBounds = { left, right: left + width, top, bottom: top + height };
-  context.strokeStyle = active || selected ? `${node.color}aa` : "rgba(63,78,78,.18)";
+  const isGlobeLabel = Boolean(node.globeSurface);
+  const leader = context.createLinearGradient(node.x, node.y, centerX, centerY);
+  leader.addColorStop(0, active || selected ? `${node.color}cc` : `${node.color}72`);
+  leader.addColorStop(1, active || selected ? `${node.color}88` : "rgba(63,78,78,.12)");
+  context.strokeStyle = leader;
   context.lineWidth = active || selected ? 1.2 : 0.65;
   context.beginPath();
   context.moveTo(node.x, node.y);
-  context.lineTo(centerX, centerY);
+  if (hasFixedLabelCenter) {
+    const direction = Math.sign(centerX - node.x) || 1;
+    context.bezierCurveTo(
+      node.x + direction * Math.min(42, Math.abs(centerX - node.x) * 0.34),
+      node.y,
+      centerX - direction * Math.min(28, Math.abs(centerX - node.x) * 0.16),
+      centerY,
+      centerX,
+      centerY,
+    );
+  } else context.lineTo(centerX, centerY);
   context.stroke();
-  context.fillStyle = active || selected ? "rgba(255,255,255,.98)" : "rgba(255,255,255,.9)";
+  context.fillStyle = active || selected
+    ? "rgba(255,255,255,.98)"
+    : isGlobeLabel ? "rgba(252,253,250,.78)" : "rgba(255,255,255,.9)";
   context.strokeStyle = active || selected ? `${node.color}99` : "rgba(63,78,78,.16)";
   context.lineWidth = active || selected ? 1.4 : 0.8;
+  if (isGlobeLabel) {
+    context.shadowColor = "rgba(27, 66, 65, 0.08)";
+    context.shadowBlur = 8;
+    context.shadowOffsetY = 2;
+  }
   context.beginPath();
   if (typeof context.roundRect === "function") context.roundRect(left, top, width, height, 6);
   else context.rect(left, top, width, height);
   context.fill();
   context.stroke();
+  context.shadowColor = "transparent";
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
   context.fillStyle = "#172b2d";
   lines.forEach((line, index) => context.fillText(line, centerX, top + 8 + index * 14));
+}
+
+function drawAtlasGlobeGraticules(context, globe, layer) {
+  const { x, y, radius } = globe;
+  const isBack = layer === "back";
+  context.save();
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.clip();
+  context.translate(x, y);
+  context.rotate(-0.075);
+  context.translate(-x, -y);
+  context.lineWidth = isBack ? 0.55 : 0.8;
+  context.strokeStyle = isBack ? "rgba(53, 122, 117, 0.085)" : "rgba(38, 117, 111, 0.19)";
+  context.setLineDash(isBack ? [2, 6] : []);
+
+  [-0.64, -0.34, 0, 0.34, 0.64].forEach((latitude) => {
+    const latitudeRadius = Math.sqrt(1 - latitude * latitude);
+    context.beginPath();
+    context.ellipse(
+      x,
+      y + latitude * radius,
+      latitudeRadius * radius,
+      Math.max(2, latitudeRadius * radius * 0.115),
+      0,
+      isBack ? Math.PI : 0,
+      isBack ? Math.PI * 2 : Math.PI,
+    );
+    context.stroke();
+  });
+
+  [-0.82, -0.44, 0, 0.44, 0.82].forEach((longitude) => {
+    const width = Math.max(1, Math.abs(longitude) * radius);
+    const frontOnRight = longitude >= 0;
+    const start = isBack === frontOnRight ? Math.PI / 2 : -Math.PI / 2;
+    context.beginPath();
+    context.ellipse(x, y, width, radius, 0, start, start + Math.PI);
+    context.stroke();
+  });
+  context.setLineDash([]);
+  context.restore();
 }
 
 function drawAtlasGlobe(context, globe) {
@@ -3148,70 +3213,92 @@ function drawAtlasGlobe(context, globe) {
   const { x, y, radius } = globe;
   context.save();
   context.globalAlpha = 1;
-  context.fillStyle = "rgba(8, 37, 39, 0.16)";
+
+  const atmosphere = context.createRadialGradient(x, y, radius * 0.76, x, y, radius * 1.18);
+  atmosphere.addColorStop(0, "rgba(31, 132, 124, 0)");
+  atmosphere.addColorStop(0.68, "rgba(31, 132, 124, 0.018)");
+  atmosphere.addColorStop(0.86, "rgba(31, 132, 124, 0.09)");
+  atmosphere.addColorStop(1, "rgba(31, 132, 124, 0)");
+  context.fillStyle = atmosphere;
   context.beginPath();
-  context.ellipse(x + radius * 0.08, y + radius * 0.94, radius * 0.76, radius * 0.12, 0, 0, Math.PI * 2);
+  context.arc(x, y, radius * 1.18, 0, Math.PI * 2);
   context.fill();
+
+  context.fillStyle = "rgba(30, 83, 80, 0.07)";
+  context.beginPath();
+  context.ellipse(x + radius * 0.05, y + radius * 1.04, radius * 0.64, radius * 0.07, 0, 0, Math.PI * 2);
+  context.fill();
+
+  drawAtlasGlobeGraticules(context, globe, "back");
 
   context.save();
   context.beginPath();
   context.arc(x, y, radius, 0, Math.PI * 2);
   context.clip();
   const sphere = context.createRadialGradient(
-    x - radius * 0.34,
-    y - radius * 0.38,
-    radius * 0.04,
-    x + radius * 0.12,
-    y + radius * 0.16,
-    radius * 1.06,
+    x - radius * 0.42,
+    y - radius * 0.46,
+    radius * 0.01,
+    x + radius * 0.15,
+    y + radius * 0.18,
+    radius * 1.14,
   );
-  sphere.addColorStop(0, "#4f938c");
-  sphere.addColorStop(0.34, "#216764");
-  sphere.addColorStop(0.7, "#10494c");
-  sphere.addColorStop(1, "#062b30");
+  sphere.addColorStop(0, "rgba(255, 255, 255, 0.52)");
+  sphere.addColorStop(0.26, "rgba(215, 244, 238, 0.15)");
+  sphere.addColorStop(0.63, "rgba(70, 154, 146, 0.07)");
+  sphere.addColorStop(0.88, "rgba(16, 94, 91, 0.11)");
+  sphere.addColorStop(1, "rgba(8, 70, 70, 0.17)");
   context.fillStyle = sphere;
   context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 
-  context.lineWidth = 0.8;
-  context.strokeStyle = "rgba(205, 236, 228, 0.2)";
-  [-60, -30, 0, 30, 60].forEach((latitudeDegrees) => {
-    const latitude = latitudeDegrees * Math.PI / 180;
-    context.beginPath();
-    context.ellipse(x, y + Math.sin(latitude) * radius, Math.cos(latitude) * radius, Math.max(1, Math.cos(latitude) * radius * 0.2), 0, 0, Math.PI * 2);
-    context.stroke();
-  });
-  [-60, -30, 0, 30, 60].forEach((longitudeDegrees) => {
-    const longitude = longitudeDegrees * Math.PI / 180;
-    context.beginPath();
-    for (let step = 0; step <= 48; step += 1) {
-      const latitude = -Math.PI / 2 + Math.PI * step / 48;
-      const pointX = x + Math.sin(longitude) * Math.cos(latitude) * radius;
-      const pointY = y + Math.sin(latitude) * radius;
-      if (step === 0) context.moveTo(pointX, pointY);
-      else context.lineTo(pointX, pointY);
-    }
-    context.stroke();
-  });
+  const innerCore = context.createRadialGradient(x, y, 0, x, y, radius * 0.62);
+  innerCore.addColorStop(0, "rgba(71, 171, 158, 0.085)");
+  innerCore.addColorStop(0.56, "rgba(71, 171, 158, 0.025)");
+  innerCore.addColorStop(1, "rgba(71, 171, 158, 0)");
+  context.fillStyle = innerCore;
+  context.beginPath();
+  context.arc(x, y, radius * 0.62, 0, Math.PI * 2);
+  context.fill();
 
   const sheen = context.createRadialGradient(
-    x - radius * 0.38,
-    y - radius * 0.42,
+    x - radius * 0.44,
+    y - radius * 0.48,
     0,
-    x - radius * 0.2,
-    y - radius * 0.24,
-    radius * 0.78,
+    x - radius * 0.22,
+    y - radius * 0.28,
+    radius * 0.86,
   );
-  sheen.addColorStop(0, "rgba(255,255,255,.26)");
-  sheen.addColorStop(0.48, "rgba(255,255,255,.04)");
+  sheen.addColorStop(0, "rgba(255,255,255,.62)");
+  sheen.addColorStop(0.38, "rgba(255,255,255,.13)");
   sheen.addColorStop(1, "rgba(255,255,255,0)");
   context.fillStyle = sheen;
   context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   context.restore();
 
-  context.strokeStyle = "rgba(12, 52, 55, 0.42)";
-  context.lineWidth = 1.4;
+  drawAtlasGlobeGraticules(context, globe, "front");
+
+  const rim = context.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
+  rim.addColorStop(0, "rgba(255, 255, 255, 0.86)");
+  rim.addColorStop(0.34, "rgba(102, 187, 175, 0.52)");
+  rim.addColorStop(0.72, "rgba(25, 114, 109, 0.36)");
+  rim.addColorStop(1, "rgba(7, 68, 70, 0.54)");
+  context.strokeStyle = rim;
+  context.lineWidth = 1.7;
   context.beginPath();
   context.arc(x, y, radius, 0, Math.PI * 2);
+  context.stroke();
+
+  context.strokeStyle = "rgba(255, 255, 255, 0.76)";
+  context.lineWidth = Math.max(1.2, radius * 0.012);
+  context.lineCap = "round";
+  context.beginPath();
+  context.arc(x, y, radius - 2, Math.PI * 1.04, Math.PI * 1.52);
+  context.stroke();
+
+  context.strokeStyle = "rgba(45, 143, 133, 0.16)";
+  context.lineWidth = 5;
+  context.beginPath();
+  context.arc(x, y, radius + 2.5, Math.PI * 0.04, Math.PI * 0.74);
   context.stroke();
   context.restore();
 }
@@ -3256,14 +3343,30 @@ function drawAtlas(time = 0) {
     const first = state.atlasNodes[edge.a]; const second = state.atlasNodes[edge.b];
     const active = persistentFocus ? edge.focusRelated : focusIndex < 0 || connected.has(edge.a) && connected.has(edge.b);
     const edgeDepth = state.atlasGlobe ? (Number(first.globeDepth || 0) + Number(second.globeDepth || 0)) / 2 : 1;
-    const depthAlpha = state.atlasGlobe ? 0.22 + Math.max(0, Math.min(1, (edgeDepth + 1) / 2)) * 0.58 : 1;
+    const depthAlpha = state.atlasGlobe ? 0.13 + Math.max(0, Math.min(1, (edgeDepth + 1) / 2)) * 0.48 : 1;
     context.globalAlpha = active ? depthAlpha : 0.06;
-    context.strokeStyle = state.atlasGlobe ? `${second.color}a8` : active && persistentFocus ? `${second.color}9f` : edge.kind === "reference" ? "rgba(28,53,58,.34)" : "rgba(70,91,96,.18)";
-    context.lineWidth = state.atlasGlobe ? 1.05 : active && persistentFocus ? 1.45 : edge.kind === "reference" ? 1.15 : 0.7;
+    if (state.atlasGlobe) {
+      const edgeGradient = context.createLinearGradient(first.x, first.y, second.x, second.y);
+      edgeGradient.addColorStop(0, `${first.color}50`);
+      edgeGradient.addColorStop(1, `${second.color}a0`);
+      context.strokeStyle = edgeGradient;
+    } else context.strokeStyle = active && persistentFocus ? `${second.color}9f` : edge.kind === "reference" ? "rgba(28,53,58,.34)" : "rgba(70,91,96,.18)";
+    context.lineWidth = state.atlasGlobe ? 0.9 : active && persistentFocus ? 1.45 : edge.kind === "reference" ? 1.15 : 0.7;
     context.setLineDash(state.atlasGlobe && edgeDepth < 0 ? [3, 4] : []);
     context.beginPath();
     context.moveTo(first.x, first.y);
-    context.lineTo(second.x, second.y);
+    if (state.atlasGlobe && first.globeSurface && second.globeSurface) {
+      const globe = state.atlasGlobe;
+      const midpointX = (first.x + second.x) / 2;
+      const midpointY = (first.y + second.y) / 2;
+      const bend = edgeDepth < 0 ? 0.035 : 0.075;
+      context.quadraticCurveTo(
+        midpointX + (midpointX - globe.x) * bend,
+        midpointY + (midpointY - globe.y) * bend,
+        second.x,
+        second.y,
+      );
+    } else context.lineTo(second.x, second.y);
     context.stroke();
   });
   const labelBoxes = [];

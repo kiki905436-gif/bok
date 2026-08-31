@@ -2709,8 +2709,9 @@ body .atlas-stage {
 body .atlas-stage[data-atlas-mode="overview"] {
   min-height: 760px;
   background:
-    radial-gradient(circle at center, rgba(18, 78, 77, 0.07), transparent 58%),
-    linear-gradient(rgba(248, 249, 246, 0.92), rgba(248, 249, 246, 0.92));
+    radial-gradient(circle at 50% 49%, rgba(75, 162, 149, 0.09) 0, rgba(75, 162, 149, 0.032) 32%, transparent 62%),
+    radial-gradient(circle at 31% 24%, rgba(255, 255, 255, 0.94) 0, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(145deg, rgba(250, 250, 247, 0.98), rgba(244, 247, 243, 0.96));
 }
 
 body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-one {
