@@ -2699,7 +2699,7 @@ body .atlas-layout {
 }
 
 body .atlas-stage {
-  min-height: 590px;
+  min-height: 690px;
   background:
     linear-gradient(rgba(248, 249, 246, 0.86), rgba(248, 249, 246, 0.86)),
     repeating-linear-gradient(0deg, transparent 0 31px, rgba(28, 61, 60, 0.035) 31px 32px),
@@ -2708,7 +2708,7 @@ body .atlas-stage {
 
 .atlas-navigator {
   min-width: 0;
-  max-height: 590px;
+  max-height: 690px;
   overflow: auto;
   border: 1px solid var(--desk-line);
   border-radius: var(--desk-radius);
@@ -2791,6 +2791,16 @@ body .atlas-stage {
   border: 1px solid var(--desk-line);
   border-radius: 9px;
   background: #fbfcf9;
+  transition: opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.atlas-project-card.is-muted {
+  opacity: 0.38;
+}
+
+.atlas-project-card.is-focused {
+  border-color: rgba(13, 117, 107, 0.5);
+  box-shadow: 0 0 0 3px rgba(13, 117, 107, 0.08);
 }
 
 .atlas-project-card > header,
@@ -2854,8 +2864,19 @@ body .atlas-stage {
   font-size: 8px;
 }
 
+.atlas-scenario-stack button.is-muted {
+  opacity: 0.42;
+}
+
+.atlas-scenario-stack button.is-focused {
+  color: var(--desk-accent);
+  background: var(--desk-accent-soft);
+  box-shadow: inset 3px 0 0 var(--desk-accent);
+}
+
 .atlas-scenario-inspector {
   padding: 14px;
+  border-top: 1px solid var(--desk-line);
 }
 
 .atlas-scenario-inspector > .section-kicker {
@@ -2985,7 +3006,7 @@ body .atlas-stage {
 
 @media (max-width: 620px) {
   body .atlas-stage {
-    min-height: 720px;
+    min-height: 1060px;
   }
 
   .atlas-project-tree {
