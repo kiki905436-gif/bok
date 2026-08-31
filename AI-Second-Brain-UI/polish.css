@@ -2714,6 +2714,50 @@ body .atlas-stage[data-atlas-mode="overview"] {
     linear-gradient(145deg, rgba(250, 250, 247, 0.98), rgba(244, 247, 243, 0.96));
 }
 
+.atlas-gesture-hint {
+  position: absolute;
+  z-index: 3;
+  right: 18px;
+  bottom: 66px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(36, 99, 94, 0.14);
+  border-radius: 999px;
+  color: rgba(26, 62, 61, 0.64);
+  background: rgba(252, 253, 250, 0.72);
+  box-shadow: 0 8px 24px rgba(32, 72, 69, 0.06);
+  backdrop-filter: blur(10px);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.atlas-gesture-hint span {
+  color: var(--desk-accent);
+  font-size: 13px;
+}
+
+.atlas-stage[data-atlas-mode="focus"] .atlas-gesture-hint {
+  display: none;
+}
+
+.atlas-controls .atlas-motion {
+  min-width: 70px;
+  padding-inline: 10px;
+  border-left: 1px solid var(--desk-line);
+}
+
+.atlas-controls .atlas-motion[aria-pressed="true"] {
+  color: var(--desk-accent);
+  background: var(--desk-accent-soft);
+}
+
+.atlas-controls .atlas-motion[hidden] {
+  display: none;
+}
+
 body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-one {
   opacity: 0;
 }
@@ -3053,5 +3097,11 @@ body .atlas-stage[data-atlas-mode="focus"] {
   .atlas-stats span {
     min-width: 0;
     flex: 1 1 92px;
+  }
+
+  .atlas-gesture-hint {
+    right: 12px;
+    bottom: 62px;
+    max-width: calc(100% - 24px);
   }
 }

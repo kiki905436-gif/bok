@@ -180,15 +180,16 @@
 
         <section class="atlas-view" id="atlasView" hidden aria-label="知识库全景">
           <div class="atlas-toolbar">
-            <div><span class="section-kicker">OPERATIONAL ONTOLOGY</span><h2>业务本体地图</h2><p>默认以透明业务星球展示项目与场景；点击场景后以它为中心，按圆形关系展开真实动作、业务对象、验证门和来源，所有节点直接显示业务名称。</p></div>
+            <div><span class="section-kicker">OPERATIONAL ONTOLOGY</span><h2>业务本体地图</h2><p>业务世界总览会缓慢转动；拖动星球寻找场景，悬停查看上下文，点击后展开真实动作、业务对象、验证门和来源。</p></div>
             <div class="atlas-stats" id="atlasStats"><span><strong>0</strong> 节点</span><span><strong>0</strong> 关联</span></div>
           </div>
           <div class="atlas-layout">
             <div class="atlas-stage" id="atlasStage">
-              <canvas id="knowledgeGraph" aria-label="动态知识关系图"></canvas>
+              <canvas id="knowledgeGraph" tabindex="0" aria-label="动态知识关系图"></canvas>
               <div class="atlas-orbit atlas-orbit-one" aria-hidden="true"></div><div class="atlas-orbit atlas-orbit-two" aria-hidden="true"></div>
               <div class="atlas-legend" id="atlasLegend"></div><div class="atlas-tooltip" id="atlasTooltip" hidden></div>
-              <div class="atlas-controls" aria-label="图谱视图控制"><button id="atlasZoomOut" type="button" aria-label="缩小图谱">−</button><button id="atlasReset" type="button">适应</button><button id="atlasZoomIn" type="button" aria-label="放大图谱">＋</button></div>
+              <div class="atlas-gesture-hint" id="atlasGestureHint"><span aria-hidden="true">↻</span> 拖动旋转 · 悬停看关联 · 点击展开闭环</div>
+              <div class="atlas-controls" aria-label="图谱视图控制"><button id="atlasZoomOut" type="button" aria-label="缩小图谱">−</button><button id="atlasReset" type="button">适应</button><button id="atlasZoomIn" type="button" aria-label="放大图谱">＋</button><button id="atlasMotion" class="atlas-motion" type="button" aria-pressed="false">暂停转动</button></div>
               <div class="atlas-empty" id="atlasEmpty"><strong>连接知识库后生成全景</strong><p>项目、知识、内容和 Skill 会成为可探索节点。</p></div>
             </div>
             <aside class="atlas-navigator" aria-label="业务场景导航">
