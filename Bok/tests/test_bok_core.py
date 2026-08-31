@@ -991,6 +991,54 @@ class OperationalExperienceContracts(unittest.TestCase):
         self.assertNotIn("codex-session:geolook-campaign", refs)
         self.assertTrue(all("messages" not in item for item in result["items"]))
 
+    def test_scenario_discovery_chunks_and_merges_every_project_session(self) -> None:
+        for index in range(38):
+            self._session(
+                f"adpilot-history-{index:02d}",
+                self.adpilot,
+                f"2026-07-{(index % 28) + 1:02d}T01:00:00Z",
+                f"第 {index + 1} 次库存接入与对账工作，覆盖来源、动作和验收证据。" + "业务证据" * 260,
+                "完成来源读回和逐行核验。",
+            )
+
+        class DiscoveryRunner:
+            model = "test-cheap-model"
+
+            def __init__(self):
+                self.batch_refs = []
+                self.merge_calls = 0
+
+            @staticmethod
+            def scenario(refs):
+                return {
+                    "scenario_id": "inventory-reconciliation",
+                    "title": "库存接入与对账",
+                    "business_outcome": "库存来源进入可验证读模型。",
+                    "keywords": ["库存", "对账"],
+                    "source_refs": refs,
+                    "related_projects": [],
+                    "reason": "重复出现的来源到验收闭环。",
+                }
+
+            def generate(self, *, system, payload, schema, cwd, images=None):
+                if "one discovery batch" in system:
+                    refs = [item["source_ref"] for item in payload["sessions"]]
+                    self.batch_refs.extend(refs)
+                    return {"scenarios": [self.scenario(refs)]}
+                self.merge_calls += 1
+                refs = sorted({ref for item in payload["candidates"] for ref in item["source_refs"]})
+                return {"scenarios": [self.scenario(refs)]}
+
+        runner = DiscoveryRunner()
+        operations = OperationalExperience(self.config, self.service.storage, runner=runner)
+        result = operations.discover("Adpilot", limit=100)
+        expected = {item["source_ref"] for item in operations.catalog.sources("Adpilot", limit=100)["items"]}
+        self.assertEqual(result["source_session_count"], 40)
+        self.assertGreater(result["discovery_batch_count"], 1)
+        self.assertEqual(runner.merge_calls, 1)
+        self.assertEqual(set(runner.batch_refs), expected)
+        self.assertEqual(set(result["scenarios"][0]["source_refs"]), expected)
+
     def test_system_wrappers_and_non_primary_sessions_do_not_pollute_project_scenarios(self) -> None:
         guardian = self.sessions / "guardian.jsonl"
         guardian.write_text("\n".join(json.dumps(item, ensure_ascii=False) for item in [
@@ -1145,6 +1193,10 @@ class OperationalExperienceContracts(unittest.TestCase):
         project_documents = list(result["publication"]["projects"].values())
         self.assertEqual(len(project_documents), 1)
         self.assertTrue(self.service.storage.content_hash(project_documents[0]["path"]))
+        project_text = self.service.storage.read_text(project_documents[0]["path"])
+        self.assertIn("已识别源会话：2", project_text)
+        self.assertIn("已用于闭环取证：2", project_text)
+        self.assertIn("会话取证覆盖率：100.0%", project_text)
         projection = operations.projection()
         self.assertEqual(projection["status"], "ready")
         self.assertEqual(projection["counts"]["by_kind"]["scenario"], 1)
