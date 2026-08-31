@@ -160,7 +160,7 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('addEventListener("wheel"', source)
         self.assertIn("atlasNodeAt", source)
 
-    def test_operational_atlas_defaults_to_global_map_and_focuses_in_place(self) -> None:
+    def test_operational_atlas_defaults_to_global_map_and_expands_business_instances(self) -> None:
         html = (UI_ROOT / "index.html").read_text(encoding="utf-8-sig")
         source = (UI_ROOT / "app.js").read_text(encoding="utf-8-sig")
         polish = (UI_ROOT / "polish.css").read_text(encoding="utf-8-sig")
@@ -181,6 +181,12 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('`cluster:${scenario.id}:${kind}`', source)
         self.assertIn('mode: focusedScenario ? "focus" : "overview"', source)
         self.assertIn('node.focusRelated = !focusedScenario || focusNodeIds.has(node.id)', source)
+        self.assertIn('isBusinessDetail: Boolean(options.isBusinessDetail)', source)
+        self.assertIn('atlasSortBusinessDetails', source)
+        self.assertIn('detailNodes.forEach((node) => focusNodeIds.add(String(node.id)))', source)
+        self.assertIn('expandedNodeCount: detailNodes.length', source)
+        self.assertIn('elements.knowledgeGraph.dataset.expandedNodes', source)
+        self.assertIn('真实业务节点', source)
         self.assertIn('elements.knowledgeGraph.dataset.focusScenario', source)
         self.assertIn('elements.atlasProjectTree.hidden = false', source)
         self.assertNotIn('elements.atlasProjectTree.hidden = true', source)
@@ -189,8 +195,9 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('function showAtlasOverview', source)
         self.assertIn('function drawAtlasFixedLabel', source)
         self.assertIn('<strong>${graph.fullNodeCount}</strong> 本体明细', source)
-        self.assertIn('默认展示完整业务总图', html)
+        self.assertIn('直接展开真实动作', html)
         self.assertIn('.atlas-project-card.is-muted', polish)
+        self.assertIn('body .atlas-stage[data-atlas-mode="focus"]', polish)
         self.assertIn('window.matchMedia("(max-width: 760px)").matches', source)
         self.assertIn('grid-template-columns: minmax(0, 1fr) 320px', polish)
         self.assertIn('@media (max-width: 620px)', polish)

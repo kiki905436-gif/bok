@@ -2620,6 +2620,7 @@ function atlasViewNode(source, x, y, options = {}) {
     color: ATLAS_COLORS[kind] || "#168d7c",
     fixed: true,
     clusterKind: options.clusterKind || "",
+    isBusinessDetail: Boolean(options.isBusinessDetail),
   };
 }
 
@@ -2628,6 +2629,16 @@ function atlasScenarioDetails(scenario, sourceNodes, sourceEdges) {
   const directTargets = new Set(sourceEdges.filter((edge) => String(edge.source) === scenarioId).map((edge) => String(edge.target)));
   const evidenceTargets = new Set(sourceEdges.filter((edge) => directTargets.has(String(edge.source)) && edge.kind === "evidenced-by").map((edge) => String(edge.target)));
   return sourceNodes.filter((node) => (directTargets.has(String(node.id)) || evidenceTargets.has(String(node.id))) && ATLAS_DETAIL_KINDS.includes(String(node.kind)));
+}
+
+function atlasSortBusinessDetails(items, kind) {
+  return items.slice().sort((first, second) => {
+    if (kind === "action") {
+      const ordinal = Number(first.ordinal || 999) - Number(second.ordinal || 999);
+      if (ordinal) return ordinal;
+    }
+    return String(first.label).localeCompare(String(second.label), "zh-CN");
+  });
 }
 
 function buildOntologyAtlas(projection, width, height, focusId = "") {
@@ -2643,13 +2654,84 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   const viewEdges = [];
   const scenarioClusters = new Map();
   const scenarioDetails = new Map();
+  const lanes = [];
+  let worldHeight = height;
   const narrow = width < 620;
   const addNode = (node) => { if (node) nodeSources.push(node); };
   const addEdge = (source, target, kind) => viewEdges.push({ source: String(source), target: String(target), kind });
 
-  if (ontology) addNode(atlasViewNode(ontology, width / 2, narrow ? 42 : 48));
+  scenarios.forEach((scenario) => scenarioDetails.set(String(scenario.id), atlasScenarioDetails(scenario, sourceNodes, sourceEdges)));
 
-  if (narrow) {
+  if (focusedScenario) {
+    const structureWidth = narrow ? width : Math.min(310, width * 0.32);
+    if (ontology) addNode(atlasViewNode(ontology, narrow ? width / 2 : structureWidth / 2, narrow ? 42 : 48));
+    let structureBottom = narrow ? 150 : 112;
+    let scenarioCursor = narrow ? 174 : 128;
+    projects.forEach((project, projectIndex) => {
+      const projectScenarios = scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
+      if (narrow) {
+        const laneWidth = width / Math.max(1, projects.length);
+        const x = laneWidth * (projectIndex + 0.5);
+        addNode(atlasViewNode(project, x, 108));
+        if (ontology) addEdge(ontology.id, project.id, "contains");
+        projectScenarios.forEach((scenario, index) => {
+          const y = scenarioCursor + index * 58;
+          addNode(atlasViewNode(scenario, x, y, { radius: 10.5 }));
+          addEdge(project.id, scenario.id, "contains");
+          structureBottom = Math.max(structureBottom, y + 54);
+        });
+      } else {
+        const rows = projectScenarios.map((_, index) => scenarioCursor + index * 62);
+        const projectY = rows.length ? rows.reduce((sum, value) => sum + value, 0) / rows.length : scenarioCursor;
+        addNode(atlasViewNode(project, 62, projectY));
+        if (ontology) addEdge(ontology.id, project.id, "contains");
+        projectScenarios.forEach((scenario, index) => {
+          addNode(atlasViewNode(scenario, structureWidth - 88, rows[index], { radius: 10.5 }));
+          addEdge(project.id, scenario.id, "contains");
+        });
+        scenarioCursor += Math.max(86, projectScenarios.length * 62 + 34);
+        structureBottom = Math.max(structureBottom, scenarioCursor);
+      }
+    });
+
+    const detailNodes = scenarioDetails.get(String(focusedScenario.id)) || [];
+    const detailIds = new Set(detailNodes.map((node) => String(node.id)));
+    if (narrow) {
+      let rowTop = structureBottom + 62;
+      for (let pairStart = 0; pairStart < ATLAS_DETAIL_KINDS.length; pairStart += 2) {
+        const pair = ATLAS_DETAIL_KINDS.slice(pairStart, pairStart + 2);
+        const pairMembers = pair.map((kind) => atlasSortBusinessDetails(detailNodes.filter((node) => node.kind === kind), kind));
+        const pairRows = Math.max(1, ...pairMembers.map((members) => members.length));
+        pair.forEach((kind, pairIndex) => {
+          const members = pairMembers[pairIndex];
+          const x = width * (pairIndex ? 0.73 : 0.27);
+          lanes.push({ x, y: rowTop - 30, label: `${ATLAS_KIND_LABELS[kind]} ${members.length}`, kind });
+          members.forEach((detail, index) => addNode(atlasViewNode(detail, x, rowTop + index * 43, { radius: 7.5, isBusinessDetail: true })));
+        });
+        rowTop += pairRows * 43 + 86;
+      }
+      worldHeight = Math.max(1060, rowTop - 40);
+    } else {
+      const detailLeft = Math.max(structureWidth + 42, width * 0.36);
+      const detailWidth = Math.max(360, width - detailLeft - 18);
+      const columnWidth = detailWidth / ATLAS_DETAIL_KINDS.length;
+      const maxRows = Math.max(1, ...ATLAS_DETAIL_KINDS.map((kind) => detailNodes.filter((node) => node.kind === kind).length));
+      const rowGap = maxRows > 1 ? Math.max(31, Math.min(42, (height - 176) / (maxRows - 1))) : 42;
+      ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
+        const members = atlasSortBusinessDetails(detailNodes.filter((node) => node.kind === kind), kind);
+        const x = detailLeft + columnWidth * (kindIndex + 0.5);
+        lanes.push({ x, y: 88, label: `${ATLAS_KIND_LABELS[kind]} ${members.length}`, kind });
+        members.forEach((detail, index) => addNode(atlasViewNode(detail, x, 134 + index * rowGap, { radius: 7.5, isBusinessDetail: true })));
+      });
+    }
+    sourceEdges.forEach((edge) => {
+      const source = String(edge.source);
+      const target = String(edge.target);
+      if (source === String(focusedScenario.id) && detailIds.has(target)) addEdge(source, target, edge.kind);
+      else if (detailIds.has(source) && detailIds.has(target)) addEdge(source, target, edge.kind);
+    });
+  } else if (narrow) {
+    if (ontology) addNode(atlasViewNode(ontology, width / 2, 42));
     const projectX = Math.max(52, width * 0.16);
     const scenarioX = Math.max(142, width * 0.40);
     const clusterX = [Math.max(scenarioX + 82, width * 0.70), Math.max(scenarioX + 142, width - 42)];
@@ -2664,8 +2746,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
         const scenarioY = scenarioRows[scenarioIndex];
         addNode(atlasViewNode(scenario, scenarioX, scenarioY, { radius: 12 }));
         addEdge(project.id, scenario.id, "contains");
-        const details = atlasScenarioDetails(scenario, sourceNodes, sourceEdges);
-        scenarioDetails.set(String(scenario.id), details);
+        const details = scenarioDetails.get(String(scenario.id)) || [];
         const clusters = [];
         ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
           const members = details.filter((node) => node.kind === kind);
@@ -2682,6 +2763,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
       cursorY += Math.max(148, projectScenarios.length * 116 + 58);
     });
   } else {
+    if (ontology) addNode(atlasViewNode(ontology, width / 2, 48));
     const laneWidth = width / Math.max(1, projects.length);
     projects.forEach((project, projectIndex) => {
       const laneCenter = laneWidth * (projectIndex + 0.5);
@@ -2692,8 +2774,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
         const scenarioY = 218 + scenarioIndex * 164;
         addNode(atlasViewNode(scenario, laneCenter, scenarioY, { radius: 12 }));
         addEdge(project.id, scenario.id, "contains");
-        const details = atlasScenarioDetails(scenario, sourceNodes, sourceEdges);
-        scenarioDetails.set(String(scenario.id), details);
+        const details = scenarioDetails.get(String(scenario.id)) || [];
         const clusters = [];
         ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
           const members = details.filter((node) => node.kind === kind);
@@ -2717,7 +2798,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
     if (ontology) focusNodeIds.add(String(ontology.id));
     if (focusedProject) focusNodeIds.add(String(focusedProject.id));
     focusNodeIds.add(String(focusedScenario.id));
-    (scenarioClusters.get(String(focusedScenario.id)) || []).forEach((id) => focusNodeIds.add(String(id)));
+    detailNodes.forEach((node) => focusNodeIds.add(String(node.id)));
   }
 
   const byId = new Map(nodeSources.map((node, index) => [node.id, index]));
@@ -2739,6 +2820,9 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
     mode: focusedScenario ? "focus" : "overview",
     focus: focusedScenario,
     detailNodes,
+    lanes,
+    expandedNodeCount: detailNodes.length,
+    worldHeight,
     legendCounts,
     fullNodeCount: sourceNodes.length,
     fullEdgeCount: sourceEdges.length,
@@ -2763,6 +2847,8 @@ function renderAtlas() {
   if (state.atlasFrame) cancelAnimationFrame(state.atlasFrame);
   state.atlasFrame = null;
   const hasProjection = Array.isArray(state.ontologyGraph?.nodes) && state.ontologyGraph.nodes.length > 0;
+  elements.atlasStage.dataset.atlasMode = hasProjection && state.atlasFocusId ? "focus" : "overview";
+  elements.atlasStage.style.minHeight = "";
   const records = state.files.filter((record) => ["ontology-projection", "project-context", "operational-loop"].includes(String(record.frontmatter.type || "")));
   const graph = hasProjection
     ? buildOntologyAtlas(state.ontologyGraph, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight, state.atlasFocusId)
@@ -2772,6 +2858,7 @@ function renderAtlas() {
   renderAtlasNavigator(graph, hasProjection);
   if (!graph.nodes.length) return;
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
+  state.atlasLanes = graph.lanes || [];
   state.atlasFixedLayout = Boolean(graph.fixed);
   state.atlasSimulationAlpha = graph.fixed || state.reduceMotion ? 0 : 1;
   state.atlasLastTime = 0;
@@ -2779,8 +2866,16 @@ function renderAtlas() {
   elements.knowledgeGraph.dataset.focusScenario = state.atlasFocusId || "";
   elements.knowledgeGraph.dataset.visibleNodes = String(graph.nodes.length);
   elements.knowledgeGraph.dataset.focusedNodes = String(graph.nodes.filter((node) => node.focusRelated).length);
+  elements.knowledgeGraph.dataset.expandedNodes = String(graph.expandedNodeCount || 0);
+  elements.atlasStage.dataset.atlasMode = graph.mode || "network";
+  if (graph.mode === "focus" && graph.worldHeight) elements.atlasStage.style.minHeight = `${Math.ceil(graph.worldHeight)}px`;
+  elements.knowledgeGraph.setAttribute("aria-label", graph.focus
+    ? `${graph.focus.label}：已在图中展开 ${graph.expandedNodeCount} 个真实业务节点`
+    : `业务本体总图：${graph.fullNodeCount || graph.nodes.length} 个本体节点`);
   elements.atlasStats.innerHTML = hasProjection
-    ? `<span><strong>${graph.fullNodeCount}</strong> 本体明细</span><span><strong>${graph.nodes.length}</strong> 全局节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
+    ? graph.focus
+      ? `<span><strong>${graph.expandedNodeCount}</strong> 真实业务节点</span><span><strong>${graph.nodes.length}</strong> 当前图节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
+      : `<span><strong>${graph.fullNodeCount}</strong> 本体明细</span><span><strong>${graph.nodes.length}</strong> 全局节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
     : `<span><strong>${graph.nodes.length}</strong> 当前节点</span><span><strong>${graph.edges.length}</strong> 真实关系</span><span><strong>${records.length}</strong> 事实文档</span>`;
   const counts = graph.legendCounts || graph.nodes.reduce((result, node) => result.set(node.kind, (result.get(node.kind) || 0) + 1), new Map());
   elements.atlasLegend.innerHTML = [...counts.entries()].map(([key, count]) => `<span><i style="background:${ATLAS_COLORS[key] || "#168d7c"}"></i>${escapeHtml(ATLAS_KIND_LABELS[key] || key)} ${count}</span>`).join("");
@@ -2967,7 +3062,7 @@ function resetAtlasCamera() {
 
 function atlasLabelLines(value, kind) {
   const text = String(value || "未命名节点");
-  const limit = kind === "scenario" ? 14 : 12;
+  const limit = kind === "scenario" ? 14 : 11;
   if (text.length <= limit) return [text];
   if (text.length <= limit * 2) return [text.slice(0, limit), text.slice(limit)];
   return [text.slice(0, limit), `${text.slice(limit, limit * 2 - 1)}…`];
@@ -3022,6 +3117,14 @@ function drawAtlas(time = 0) {
   context.translate(width / 2 + state.atlasCamera.x, height / 2 + state.atlasCamera.y);
   context.scale(state.atlasCamera.scale, state.atlasCamera.scale);
   context.translate(-width / 2, -height / 2);
+  (state.atlasLanes || []).forEach((lane) => {
+    context.globalAlpha = 1;
+    context.font = '650 10px "Microsoft YaHei UI", sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = ATLAS_COLORS[lane.kind] || "#168d7c";
+    context.fillText(lane.label, lane.x, lane.y);
+  });
   state.atlasEdges.forEach((edge) => {
     const first = state.atlasNodes[edge.a]; const second = state.atlasNodes[edge.b];
     const active = persistentFocus ? edge.focusRelated : focusIndex < 0 || connected.has(edge.a) && connected.has(edge.b);
