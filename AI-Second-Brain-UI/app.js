@@ -133,12 +133,14 @@ const elements = {
   emptyStateTitle: $("#emptyStateTitle"),
   emptyStateCopy: $("#emptyStateCopy"),
   atlasStage: $("#atlasStage"),
+  atlasFlow: $("#atlasFlow"),
   knowledgeGraph: $("#knowledgeGraph"),
   atlasStats: $("#atlasStats"),
   atlasLegend: $("#atlasLegend"),
   atlasTooltip: $("#atlasTooltip"),
   atlasEmpty: $("#atlasEmpty"),
   atlasNavigatorTitle: $("#atlasNavigatorTitle"),
+  atlasNavigator: $(".atlas-navigator"),
   atlasOverview: $("#atlasOverview"),
   atlasProjectTree: $("#atlasProjectTree"),
   atlasScenarioInspector: $("#atlasScenarioInspector"),
@@ -2516,12 +2518,14 @@ async function revealCurrentFile() {
 const ATLAS_COLORS = {
   ontology: "#183a3d", project: "#4f78d7", scenario: "#cf6f68", "business-object": "#d98b3a",
   action: "#168d7c", "verification-gate": "#8065c9", source: "#71808c",
+  trigger: "#2f7b89", precondition: "#a56b28", outcome: "#287454",
   projects: "#4f78d7", knowledge: "#168d7c", content: "#d98b3a", prompts: "#8065c9",
   business: "#cf6f68", skills: "#2f9db2", archive: "#8e8a82", system: "#71808c",
 };
 const ATLAS_KIND_LABELS = {
   ontology: "本体", project: "项目", scenario: "业务场景", "business-object": "业务对象",
   action: "业务动作", "verification-gate": "验证门", source: "来源会话",
+  trigger: "触发条件", precondition: "执行前确认", outcome: "业务结果",
 };
 
 function hashNumber(value) {
@@ -2641,6 +2645,39 @@ function atlasSortBusinessDetails(items, kind) {
   });
 }
 
+function atlasCleanEvidenceText(value = "") {
+  return stripMarkdown(String(value)
+    .replace(/\s*_?\(来源：[^)]*\)_?/gu, "")
+    .replace(/^\s*来源：.*$/gmu, ""))
+    .trim();
+}
+
+function atlasSectionSummary(text, titles, limit = 220) {
+  const summary = atlasCleanEvidenceText(sectionLines(text, titles).join("\n"));
+  if (summary.length <= limit) return summary;
+  return `${summary.slice(0, limit - 1)}…`;
+}
+
+function atlasScenarioNarrative(scenario) {
+  const path = String(scenario?.path || scenario?.document_path || "");
+  const record = state.files.find((item) => item.path === path);
+  const text = String(record?.text || "");
+  const preconditions = sectionList(text, ["前置条件"])
+    .map((item) => atlasCleanEvidenceText(item))
+    .filter(Boolean)
+    .slice(0, 4);
+  return {
+    trigger: atlasSectionSummary(text, ["触发条件"], 240),
+    outcome: atlasSectionSummary(text, ["业务结果"], 280),
+    preconditions,
+  };
+}
+
+function atlasCompactText(value = "", limit = 120) {
+  const text = atlasCleanEvidenceText(value);
+  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
+}
+
 function buildOntologyAtlas(projection, width, height, focusId = "") {
   const sourceNodes = Array.isArray(projection?.nodes) ? projection.nodes : [];
   const sourceEdges = Array.isArray(projection?.edges) ? projection.edges : [];
@@ -2652,7 +2689,6 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   const scenarios = sourceNodes.filter((node) => node.kind === "scenario");
   const nodeSources = [];
   const viewEdges = [];
-  const scenarioClusters = new Map();
   const scenarioDetails = new Map();
   const lanes = [];
   let worldHeight = height;
@@ -2663,105 +2699,26 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   scenarios.forEach((scenario) => scenarioDetails.set(String(scenario.id), atlasScenarioDetails(scenario, sourceNodes, sourceEdges)));
 
   if (focusedScenario) {
-    const structureWidth = narrow ? width : Math.min(310, width * 0.32);
-    if (ontology) addNode(atlasViewNode(ontology, narrow ? width / 2 : structureWidth / 2, narrow ? 42 : 48));
-    let structureBottom = narrow ? 150 : 112;
-    let scenarioCursor = narrow ? 174 : 128;
-    projects.forEach((project, projectIndex) => {
-      const projectScenarios = scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
-      if (narrow) {
-        const laneWidth = width / Math.max(1, projects.length);
-        const x = laneWidth * (projectIndex + 0.5);
-        addNode(atlasViewNode(project, x, 108));
-        if (ontology) addEdge(ontology.id, project.id, "contains");
-        projectScenarios.forEach((scenario, index) => {
-          const y = scenarioCursor + index * 58;
-          addNode(atlasViewNode(scenario, x, y, { radius: 10.5 }));
-          addEdge(project.id, scenario.id, "contains");
-          structureBottom = Math.max(structureBottom, y + 54);
-        });
-      } else {
-        const rows = projectScenarios.map((_, index) => scenarioCursor + index * 62);
-        const projectY = rows.length ? rows.reduce((sum, value) => sum + value, 0) / rows.length : scenarioCursor;
-        addNode(atlasViewNode(project, 62, projectY));
-        if (ontology) addEdge(ontology.id, project.id, "contains");
-        projectScenarios.forEach((scenario, index) => {
-          addNode(atlasViewNode(scenario, structureWidth - 88, rows[index], { radius: 10.5 }));
-          addEdge(project.id, scenario.id, "contains");
-        });
-        scenarioCursor += Math.max(86, projectScenarios.length * 62 + 34);
-        structureBottom = Math.max(structureBottom, scenarioCursor);
-      }
-    });
-
-    const detailNodes = scenarioDetails.get(String(focusedScenario.id)) || [];
-    const detailIds = new Set(detailNodes.map((node) => String(node.id)));
-    if (narrow) {
-      let rowTop = structureBottom + 62;
-      for (let pairStart = 0; pairStart < ATLAS_DETAIL_KINDS.length; pairStart += 2) {
-        const pair = ATLAS_DETAIL_KINDS.slice(pairStart, pairStart + 2);
-        const pairMembers = pair.map((kind) => atlasSortBusinessDetails(detailNodes.filter((node) => node.kind === kind), kind));
-        const pairRows = Math.max(1, ...pairMembers.map((members) => members.length));
-        pair.forEach((kind, pairIndex) => {
-          const members = pairMembers[pairIndex];
-          const x = width * (pairIndex ? 0.73 : 0.27);
-          lanes.push({ x, y: rowTop - 30, label: `${ATLAS_KIND_LABELS[kind]} ${members.length}`, kind });
-          members.forEach((detail, index) => addNode(atlasViewNode(detail, x, rowTop + index * 43, { radius: 7.5, isBusinessDetail: true })));
-        });
-        rowTop += pairRows * 43 + 86;
-      }
-      worldHeight = Math.max(1060, rowTop - 40);
-    } else {
-      const detailLeft = Math.max(structureWidth + 42, width * 0.36);
-      const detailWidth = Math.max(360, width - detailLeft - 18);
-      const columnWidth = detailWidth / ATLAS_DETAIL_KINDS.length;
-      const maxRows = Math.max(1, ...ATLAS_DETAIL_KINDS.map((kind) => detailNodes.filter((node) => node.kind === kind).length));
-      const rowGap = maxRows > 1 ? Math.max(31, Math.min(42, (height - 176) / (maxRows - 1))) : 42;
-      ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
-        const members = atlasSortBusinessDetails(detailNodes.filter((node) => node.kind === kind), kind);
-        const x = detailLeft + columnWidth * (kindIndex + 0.5);
-        lanes.push({ x, y: 88, label: `${ATLAS_KIND_LABELS[kind]} ${members.length}`, kind });
-        members.forEach((detail, index) => addNode(atlasViewNode(detail, x, 134 + index * rowGap, { radius: 7.5, isBusinessDetail: true })));
-      });
-    }
-    sourceEdges.forEach((edge) => {
-      const source = String(edge.source);
-      const target = String(edge.target);
-      if (source === String(focusedScenario.id) && detailIds.has(target)) addEdge(source, target, edge.kind);
-      else if (detailIds.has(source) && detailIds.has(target)) addEdge(source, target, edge.kind);
-    });
+    // The focused experience is rendered as a semantic DOM flow below. Keep the
+    // canvas model intentionally small so unrelated projects and scenarios do not
+    // reserve invisible space or pull the selected process off screen.
+    addNode(atlasViewNode(focusedScenario, width / 2, height / 2, { radius: 12 }));
   } else if (narrow) {
     if (ontology) addNode(atlasViewNode(ontology, width / 2, 42));
-    const projectX = Math.max(52, width * 0.16);
-    const scenarioX = Math.max(142, width * 0.40);
-    const clusterX = [Math.max(scenarioX + 82, width * 0.70), Math.max(scenarioX + 142, width - 42)];
-    let cursorY = 118;
+    let cursorY = 112;
     projects.forEach((project) => {
       const projectScenarios = scenarios.filter((scenario) => scenario.project_id === project.project_id).sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
-      const scenarioRows = projectScenarios.map((_, index) => cursorY + 38 + index * 116);
-      const projectY = scenarioRows.length ? scenarioRows.reduce((sum, value) => sum + value, 0) / scenarioRows.length : cursorY + 38;
-      addNode(atlasViewNode(project, projectX, projectY));
+      addNode(atlasViewNode(project, width / 2, cursorY));
       if (ontology) addEdge(ontology.id, project.id, "contains");
       projectScenarios.forEach((scenario, scenarioIndex) => {
-        const scenarioY = scenarioRows[scenarioIndex];
-        addNode(atlasViewNode(scenario, scenarioX, scenarioY, { radius: 12 }));
+        const x = width * (scenarioIndex % 2 === 0 ? 0.29 : 0.71);
+        const y = cursorY + 66 + Math.floor(scenarioIndex / 2) * 68;
+        addNode(atlasViewNode(scenario, x, y, { radius: 12 }));
         addEdge(project.id, scenario.id, "contains");
-        const details = scenarioDetails.get(String(scenario.id)) || [];
-        const clusters = [];
-        ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
-          const members = details.filter((node) => node.kind === kind);
-          if (!members.length) return;
-          const source = { id: `cluster:${scenario.id}:${kind}`, kind, label: `${ATLAS_KIND_LABELS[kind]} · ${members.length}`, document_path: scenario.path, status: "derived" };
-          const cluster = atlasViewNode(source, clusterX[kindIndex % 2], scenarioY + (kindIndex < 2 ? -18 : 24), { radius: 9.5, clusterKind: kind });
-          cluster.scenarioId = String(scenario.id);
-          clusters.push(cluster.id);
-          addNode(cluster);
-          addEdge(scenario.id, cluster.id, kind);
-        });
-        scenarioClusters.set(String(scenario.id), clusters);
       });
-      cursorY += Math.max(148, projectScenarios.length * 116 + 58);
+      cursorY += 108 + Math.ceil(projectScenarios.length / 2) * 68;
     });
+    worldHeight = Math.max(height, cursorY + 24);
   } else {
     if (ontology) addNode(atlasViewNode(ontology, width / 2, 48));
     const laneWidth = width / Math.max(1, projects.length);
@@ -2771,23 +2728,12 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
       addNode(atlasViewNode(project, laneCenter, 122));
       if (ontology) addEdge(ontology.id, project.id, "contains");
       projectScenarios.forEach((scenario, scenarioIndex) => {
-        const scenarioY = 218 + scenarioIndex * 164;
-        addNode(atlasViewNode(scenario, laneCenter, scenarioY, { radius: 12 }));
+        const x = laneCenter + (scenarioIndex % 2 === 0 ? -laneWidth * 0.21 : laneWidth * 0.21);
+        const y = 194 + Math.floor(scenarioIndex / 2) * 58;
+        addNode(atlasViewNode(scenario, x, y, { radius: 11 }));
         addEdge(project.id, scenario.id, "contains");
-        const details = scenarioDetails.get(String(scenario.id)) || [];
-        const clusters = [];
-        ATLAS_DETAIL_KINDS.forEach((kind, kindIndex) => {
-          const members = details.filter((node) => node.kind === kind);
-          if (!members.length) return;
-          const source = { id: `cluster:${scenario.id}:${kind}`, kind, label: `${ATLAS_KIND_LABELS[kind]} · ${members.length}`, document_path: scenario.path, status: "derived" };
-          const cluster = atlasViewNode(source, laneCenter + (kindIndex % 2 === 0 ? -laneWidth * 0.19 : laneWidth * 0.19), scenarioY + (kindIndex < 2 ? 50 : 94), { radius: 9.5, clusterKind: kind });
-          cluster.scenarioId = String(scenario.id);
-          clusters.push(cluster.id);
-          addNode(cluster);
-          addEdge(scenario.id, cluster.id, kind);
-        });
-        scenarioClusters.set(String(scenario.id), clusters);
       });
+      worldHeight = Math.max(worldHeight, 264 + Math.ceil(projectScenarios.length / 2) * 58);
     });
   }
 
@@ -2843,6 +2789,51 @@ function paperScrapPath(context, width, height, seed = 0) {
   context.closePath();
 }
 
+function renderAtlasFlow(graph) {
+  const scenario = graph.focus;
+  if (!scenario) {
+    elements.atlasFlow.hidden = true;
+    elements.atlasFlow.innerHTML = "";
+    return;
+  }
+  const narrative = atlasScenarioNarrative(scenario);
+  const project = (state.ontologyGraph?.nodes || []).find((node) => node.kind === "project" && node.project_id === scenario.project_id);
+  const actions = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "action"), "action");
+  const objects = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "business-object"), "business-object");
+  const gates = atlasSortBusinessDetails(graph.detailNodes.filter((node) => node.kind === "verification-gate"), "verification-gate");
+  const sources = graph.detailNodes.filter((node) => node.kind === "source");
+  const status = ATLAS_STATUS_LABELS[scenario.status] || scenario.status || "待确认";
+  const preconditions = narrative.preconditions.length
+    ? narrative.preconditions
+    : ["该场景尚未提取出可独立展示的前置条件，请打开场景文档核对。"];
+  elements.atlasFlow.innerHTML = `
+    <article class="atlas-flow-hero">
+      <div><span>${escapeHtml(project?.label || scenario.project_id || "业务项目")} · 业务闭环</span><h3>${escapeHtml(scenario.label)}</h3></div>
+      <strong>${escapeHtml(status)}</strong>
+    </article>
+    <div class="atlas-flow-entry">
+      <section class="atlas-flow-context is-trigger"><span>何时触发</span><p>${escapeHtml(narrative.trigger || "触发条件尚待从场景证据中补齐。")}</p></section>
+      <section class="atlas-flow-context is-precondition"><span>执行前确认</span><ul>${preconditions.map((item) => `<li>${escapeHtml(atlasCompactText(item, 150))}</li>`).join("")}</ul></section>
+    </div>
+    <section class="atlas-flow-section is-actions">
+      <header><div><span>01</span><strong>执行路径</strong></div><small>${actions.length} 个顺序动作</small></header>
+      <ol class="atlas-flow-steps">${actions.map((action, index) => `<li><span>${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(action.label || `步骤 ${index + 1}`)}</strong><p>${escapeHtml(atlasCompactText(action.description || "", 150))}</p></div></li>`).join("")}</ol>
+    </section>
+    <section class="atlas-flow-section is-objects">
+      <header><div><span>02</span><strong>本流程操作的业务对象</strong></div><small>${objects.length} 个对象</small></header>
+      <div class="atlas-flow-card-grid">${objects.map((object) => `<article><i></i><p>${escapeHtml(atlasCompactText(object.label, 180))}</p></article>`).join("")}</div>
+    </section>
+    <section class="atlas-flow-section is-gates">
+      <header><div><span>03</span><strong>完成前必须通过的验证门</strong></div><small>${gates.length} 个验证门</small></header>
+      <div class="atlas-flow-gates">${gates.map((gate) => `<article><span>✓</span><p>${escapeHtml(atlasCompactText(gate.label, 190))}</p></article>`).join("")}</div>
+    </section>
+    <footer class="atlas-flow-outcome">
+      <div><span>业务结果</span><strong>${escapeHtml(narrative.outcome || scenario.label)}</strong></div>
+      <small>${sources.length} 个来源会话支撑 · ${escapeHtml(status)}</small>
+    </footer>`;
+  elements.atlasFlow.hidden = false;
+}
+
 function renderAtlas() {
   if (state.atlasFrame) cancelAnimationFrame(state.atlasFrame);
   state.atlasFrame = null;
@@ -2853,9 +2844,11 @@ function renderAtlas() {
   const graph = hasProjection
     ? buildOntologyAtlas(state.ontologyGraph, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight, state.atlasFocusId)
     : buildAtlas(records, elements.atlasStage.clientWidth, elements.atlasStage.clientHeight);
-  elements.atlasEmpty.hidden = graph.nodes.length > 0;
-  elements.knowledgeGraph.hidden = graph.nodes.length === 0;
+  const flowMode = Boolean(graph.focus);
+  elements.atlasEmpty.hidden = graph.nodes.length > 0 || flowMode;
+  elements.knowledgeGraph.hidden = graph.nodes.length === 0 || flowMode;
   renderAtlasNavigator(graph, hasProjection);
+  renderAtlasFlow(graph);
   if (!graph.nodes.length) return;
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
   state.atlasLanes = graph.lanes || [];
@@ -2868,18 +2861,20 @@ function renderAtlas() {
   elements.knowledgeGraph.dataset.focusedNodes = String(graph.nodes.filter((node) => node.focusRelated).length);
   elements.knowledgeGraph.dataset.expandedNodes = String(graph.expandedNodeCount || 0);
   elements.atlasStage.dataset.atlasMode = graph.mode || "network";
-  if (graph.mode === "focus" && graph.worldHeight) elements.atlasStage.style.minHeight = `${Math.ceil(graph.worldHeight)}px`;
   elements.knowledgeGraph.setAttribute("aria-label", graph.focus
-    ? `${graph.focus.label}：已在图中展开 ${graph.expandedNodeCount} 个真实业务节点`
+    ? `${graph.focus.label}：已切换为可读业务闭环流程`
     : `业务本体总图：${graph.fullNodeCount || graph.nodes.length} 个本体节点`);
+  const focusCounts = graph.focus ? Object.fromEntries(ATLAS_DETAIL_KINDS.map((kind) => [kind, graph.detailNodes.filter((node) => node.kind === kind).length])) : {};
   elements.atlasStats.innerHTML = hasProjection
     ? graph.focus
-      ? `<span><strong>${graph.expandedNodeCount}</strong> 真实业务节点</span><span><strong>${graph.nodes.length}</strong> 当前图节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
-      : `<span><strong>${graph.fullNodeCount}</strong> 本体明细</span><span><strong>${graph.nodes.length}</strong> 全局节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
+      ? `<span><strong>${focusCounts.action || 0}</strong> 执行动作</span><span><strong>${focusCounts["business-object"] || 0}</strong> 业务对象</span><span><strong>${focusCounts["verification-gate"] || 0}</strong> 验证门</span>`
+      : `<span><strong>${(state.ontologyGraph.nodes || []).filter((node) => node.kind === "scenario").length}</strong> 业务场景</span><span><strong>${graph.nodes.length}</strong> 总图节点</span><span><strong>${state.ontologyGraph.canonical_documents?.length || 0}</strong> 事实文档</span>`
     : `<span><strong>${graph.nodes.length}</strong> 当前节点</span><span><strong>${graph.edges.length}</strong> 真实关系</span><span><strong>${records.length}</strong> 事实文档</span>`;
-  const counts = graph.legendCounts || graph.nodes.reduce((result, node) => result.set(node.kind, (result.get(node.kind) || 0) + 1), new Map());
+  const counts = graph.focus
+    ? new Map(ATLAS_DETAIL_KINDS.map((kind) => [kind, focusCounts[kind] || 0]).filter(([, count]) => count > 0))
+    : graph.legendCounts || graph.nodes.reduce((result, node) => result.set(node.kind, (result.get(node.kind) || 0) + 1), new Map());
   elements.atlasLegend.innerHTML = [...counts.entries()].map(([key, count]) => `<span><i style="background:${ATLAS_COLORS[key] || "#168d7c"}"></i>${escapeHtml(ATLAS_KIND_LABELS[key] || key)} ${count}</span>`).join("");
-  drawAtlas(0);
+  if (!flowMode) drawAtlas(0);
 }
 
 function renderAtlasNavigator(graph, hasProjection) {
@@ -2929,12 +2924,14 @@ function focusAtlasScenario(identifier) {
   state.atlasFocusId = String(scenario.id);
   state.atlasSelectedPath = String(scenario.id);
   renderAtlas();
+  elements.atlasNavigator.scrollTop = 0;
 }
 
 function showAtlasOverview() {
   state.atlasFocusId = null;
   state.atlasSelectedPath = null;
   renderAtlas();
+  elements.atlasNavigator.scrollTop = 0;
 }
 
 function activateAtlasNode(identifier) {
