@@ -2706,6 +2706,10 @@ body .atlas-stage {
     repeating-linear-gradient(90deg, transparent 0 31px, rgba(28, 61, 60, 0.035) 31px 32px);
 }
 
+body .atlas-stage[data-atlas-mode="focus"] {
+  min-height: 690px;
+}
+
 .atlas-navigator {
   min-width: 0;
   max-height: 690px;
