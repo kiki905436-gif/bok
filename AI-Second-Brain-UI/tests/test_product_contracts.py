@@ -168,6 +168,7 @@ class ProductContracts(unittest.TestCase):
             'id="atlasNavigatorTitle"',
             'id="atlasProjectTree"',
             'id="atlasScenarioInspector"',
+            'id="atlasFlow"',
             'id="atlasBack"',
             'id="atlasFocusTitle"',
             'id="atlasFocusMeta"',
@@ -177,8 +178,6 @@ class ProductContracts(unittest.TestCase):
             self.assertIn(identifier, html)
         self.assertIn('atlasFocusId: null', source)
         self.assertIn('const focusedScenario = focus?.kind === "scenario" ? focus : null', source)
-        self.assertIn('const scenarioClusters = new Map()', source)
-        self.assertIn('`cluster:${scenario.id}:${kind}`', source)
         self.assertIn('mode: focusedScenario ? "focus" : "overview"', source)
         self.assertIn('node.focusRelated = !focusedScenario || focusNodeIds.has(node.id)', source)
         self.assertIn('isBusinessDetail: Boolean(options.isBusinessDetail)', source)
@@ -186,18 +185,33 @@ class ProductContracts(unittest.TestCase):
         self.assertIn('detailNodes.forEach((node) => focusNodeIds.add(String(node.id)))', source)
         self.assertIn('expandedNodeCount: detailNodes.length', source)
         self.assertIn('elements.knowledgeGraph.dataset.expandedNodes', source)
-        self.assertIn('真实业务节点', source)
         self.assertIn('elements.knowledgeGraph.dataset.focusScenario', source)
         self.assertIn('elements.atlasProjectTree.hidden = false', source)
         self.assertNotIn('elements.atlasProjectTree.hidden = true', source)
         self.assertIn('function renderAtlasNavigator', source)
         self.assertIn('function focusAtlasScenario', source)
+        self.assertIn('elements.atlasNavigator.scrollTop = 0', source)
         self.assertIn('function showAtlasOverview', source)
         self.assertIn('function drawAtlasFixedLabel', source)
-        self.assertIn('<strong>${graph.fullNodeCount}</strong> 本体明细', source)
-        self.assertIn('直接展开真实动作', html)
+        self.assertIn('function atlasScenarioNarrative', source)
+        self.assertIn('atlasSectionSummary(text, ["触发条件"]', source)
+        self.assertIn('atlasSectionSummary(text, ["业务结果"]', source)
+        self.assertIn('sectionList(text, ["前置条件"])', source)
+        self.assertIn('function renderAtlasFlow', source)
+        self.assertIn('const flowMode = Boolean(graph.focus)', source)
+        self.assertIn('elements.knowledgeGraph.hidden = graph.nodes.length === 0 || flowMode', source)
+        self.assertIn('if (!flowMode) drawAtlas(0)', source)
+        self.assertIn('执行路径', source)
+        self.assertIn('本流程操作的业务对象', source)
+        self.assertIn('完成前必须通过的验证门', source)
+        self.assertNotIn('const scenarioClusters = new Map()', source)
+        self.assertNotIn('`cluster:${scenario.id}:${kind}`', source)
+        self.assertIn('点击场景后切换为可执行闭环', html)
         self.assertIn('.atlas-project-card.is-muted', polish)
         self.assertIn('body .atlas-stage[data-atlas-mode="focus"]', polish)
+        self.assertIn('.atlas-flow-entry', polish)
+        self.assertIn('.atlas-flow-steps', polish)
+        self.assertIn('order: 1', polish)
         self.assertIn('window.matchMedia("(max-width: 760px)").matches', source)
         self.assertIn('grid-template-columns: minmax(0, 1fr) 320px', polish)
         self.assertIn('@media (max-width: 620px)', polish)
