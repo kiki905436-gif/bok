@@ -2706,6 +2706,21 @@ body .atlas-stage {
     repeating-linear-gradient(90deg, transparent 0 31px, rgba(28, 61, 60, 0.035) 31px 32px);
 }
 
+body .atlas-stage[data-atlas-mode="overview"] {
+  min-height: 760px;
+  background:
+    radial-gradient(circle at center, rgba(18, 78, 77, 0.07), transparent 58%),
+    linear-gradient(rgba(248, 249, 246, 0.92), rgba(248, 249, 246, 0.92));
+}
+
+body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-one {
+  opacity: 0;
+}
+
+body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-two {
+  opacity: 0;
+}
+
 body .atlas-stage[data-atlas-mode="focus"] {
   min-height: 760px;
   background:
