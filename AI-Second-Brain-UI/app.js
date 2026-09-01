@@ -55,6 +55,10 @@ const state = {
   atlasGlobePaused: false,
   atlasGlobeAutoUntil: 0,
   atlasGlobeInteractionAt: 0,
+  atlasGlobeHoverId: null,
+  atlasGlobeHoverAt: 0,
+  atlasTransitionAt: 0,
+  atlasAmbientFrameAt: 0,
   atlasPointer: { x: -9999, y: -9999 },
   atlasSelectedPath: null,
   atlasFocusId: null,
@@ -2752,7 +2756,7 @@ function buildOntologyAtlas(projection, width, height, focusId = "") {
   } else {
     const compactOverview = width < 620;
     const centerX = width / 2;
-    const centerY = height / 2 + (compactOverview ? 14 : 18);
+    const centerY = compactOverview ? Math.min(height * 0.39, 420) : height / 2 + 18;
     const globeRadius = Math.min(width * (compactOverview ? 0.39 : 0.34), height * 0.39, compactOverview ? 174 : 310);
     globe = { x: centerX, y: centerY, radius: globeRadius };
     const projectScenarios = new Map(projects.map((project) => [
@@ -2890,6 +2894,7 @@ function renderAtlas() {
   state.atlasNodes = graph.nodes; state.atlasEdges = graph.edges; state.atlasGroups = graph.groups;
   state.atlasLanes = graph.lanes || [];
   state.atlasGlobe = graph.globe || null;
+  if (!state.atlasTransitionAt) state.atlasTransitionAt = performance.now();
   if (state.atlasGlobe && !state.atlasGlobeAutoUntil && !state.atlasGlobePaused && !state.reduceMotion) {
     state.atlasGlobeAutoUntil = performance.now() + 9000;
   }
@@ -2905,6 +2910,7 @@ function renderAtlas() {
   elements.knowledgeGraph.dataset.focusedNodes = String(graph.nodes.filter((node) => node.focusRelated).length);
   elements.knowledgeGraph.dataset.expandedNodes = String(graph.expandedNodeCount || 0);
   elements.atlasStage.dataset.atlasMode = graph.mode || "network";
+  elements.atlasStage.dataset.motion = state.reduceMotion ? "reduced" : "ambient";
   elements.knowledgeGraph.setAttribute("aria-label", graph.focus
     ? `${graph.focus.label}：真实动作、业务对象、验证门和来源的圆形关系图`
     : `业务本体总图：${graph.fullNodeCount || graph.nodes.length} 个本体节点`);
@@ -2967,6 +2973,7 @@ function focusAtlasScenario(identifier) {
   if (!scenario) return;
   state.atlasFocusId = String(scenario.id);
   state.atlasSelectedPath = String(scenario.id);
+  state.atlasTransitionAt = performance.now();
   renderAtlas();
   elements.atlasNavigator.scrollTop = 0;
   elements.atlasView.scrollIntoView({ behavior: "auto", block: "start" });
@@ -2975,6 +2982,7 @@ function focusAtlasScenario(identifier) {
 function showAtlasOverview() {
   state.atlasFocusId = null;
   state.atlasSelectedPath = null;
+  state.atlasTransitionAt = performance.now();
   if (!state.reduceMotion && !state.atlasGlobePaused) state.atlasGlobeAutoUntil = performance.now() + 6000;
   renderAtlas();
   elements.atlasNavigator.scrollTop = 0;
@@ -3141,7 +3149,8 @@ function updateAtlasGlobeMotion(time, width, height, animate) {
   const elapsed = state.atlasLastTime ? Math.max(0, Math.min(42, now - state.atlasLastTime)) : 16;
   state.atlasLastTime = now;
   const pointerInside = atlasPointInsideGlobe(state.atlasPointer, width, height);
-  const pointerEngaged = pointerInside || Boolean(atlasNodeAt(state.atlasPointer, width, height));
+  const hoveredNode = atlasNodeAt(state.atlasPointer, width, height);
+  const approachFactor = hoveredNode ? 0.12 : pointerInside ? 0.34 : 1;
   const dragging = state.atlasDrag?.mode === "globe";
   let moving = false;
   if (!dragging && Math.abs(state.atlasGlobeVelocity) > 0.00001) {
@@ -3153,11 +3162,10 @@ function updateAtlasGlobeMotion(time, width, height, animate) {
     animate
     && !state.atlasGlobePaused
     && now < state.atlasGlobeAutoUntil
-    && !pointerEngaged
     && !dragging
     && now - state.atlasGlobeInteractionAt > 900
   ) {
-    state.atlasGlobeRotation += elapsed * 0.000085;
+    state.atlasGlobeRotation += elapsed * 0.000085 * approachFactor;
     moving = true;
   }
   if (state.atlasGlobeAutoUntil > 0 && now >= state.atlasGlobeAutoUntil) {
@@ -3189,6 +3197,7 @@ function atlasBoxesOverlap(first, second, gap = 4) {
 function resolveAtlasGlobeLabels(context, canvasWidth, canvasHeight, hoveredIndex, selectedIndex) {
   if (!state.atlasGlobe) return [];
   const globe = state.atlasGlobe;
+  const labelDepthThreshold = canvasWidth < 420 ? 0.34 : canvasWidth < 620 ? 0.18 : 0.025;
   state.atlasNodes.forEach((node) => {
     if (!node.globeSurface) return;
     node.labelBounds = null;
@@ -3196,7 +3205,7 @@ function resolveAtlasGlobeLabels(context, canvasWidth, canvasHeight, hoveredInde
   });
   const candidates = state.atlasNodes
     .map((node, index) => ({ node, index }))
-    .filter(({ node }) => node.globeSurface && Number(node.globeDepth || 0) > 0.025)
+    .filter(({ node }) => node.globeSurface && Number(node.globeDepth || 0) > labelDepthThreshold)
     .sort((first, second) => {
       const firstPriority = (first.index === selectedIndex ? 4 : 0) + (first.index === hoveredIndex ? 3 : 0) + (first.node.kind === "project" ? 2 : 0);
       const secondPriority = (second.index === selectedIndex ? 4 : 0) + (second.index === hoveredIndex ? 3 : 0) + (second.node.kind === "project" ? 2 : 0);
@@ -3235,7 +3244,7 @@ function resolveAtlasGlobeLabels(context, canvasWidth, canvasHeight, hoveredInde
         bottom: centerY + labelHeight / 2,
       };
       const overlapCount = occupied.filter((item) => atlasBoxesOverlap(box, item)).length;
-      const nodeOcclusions = candidates.filter(({ node: other }) => other !== node && Number(other.globeDepth || 0) > 0.025 && (
+      const nodeOcclusions = candidates.filter(({ node: other }) => other !== node && Number(other.globeDepth || 0) > labelDepthThreshold && (
         other.x >= box.left - other.radius && other.x <= box.right + other.radius
         && other.y >= box.top - other.radius && other.y <= box.bottom + other.radius
       )).length;
@@ -3250,13 +3259,14 @@ function resolveAtlasGlobeLabels(context, canvasWidth, canvasHeight, hoveredInde
   return candidates.map(({ node }) => node).filter((node) => node.globeLabel);
 }
 
-function drawAtlasGlobeLabel(context, node) {
+function drawAtlasGlobeLabel(context, node, time = 0) {
   const label = node.globeLabel;
   if (!label) return;
   const anchorX = label.side > 0 ? label.left : label.right;
   const anchorY = Math.max(label.top + 7, Math.min(label.bottom - 7, label.centerY));
   const emphasis = label.active || label.selected;
   const depth = Math.max(0, Math.min(1, Number(node.globeDepth || 0)));
+  const pulse = state.reduceMotion ? 0 : (Math.sin((time || performance.now()) / 360 + hashNumber(node.id) * 0.013) + 1) / 2;
   context.save();
   context.globalAlpha = 0.68 + depth * 0.32;
   context.strokeStyle = emphasis ? `${node.color}bc` : `${node.color}60`;
@@ -3269,7 +3279,7 @@ function drawAtlasGlobeLabel(context, node) {
   context.strokeStyle = emphasis ? `${node.color}90` : "rgba(37,74,72,.14)";
   context.lineWidth = emphasis ? 1.2 : 0.75;
   context.shadowColor = emphasis ? "rgba(18, 77, 72, 0.15)" : "rgba(18, 77, 72, 0.06)";
-  context.shadowBlur = emphasis ? 12 : 6;
+  context.shadowBlur = emphasis ? 12 + pulse * 5 : 6;
   context.shadowOffsetY = 2;
   context.beginPath();
   if (typeof context.roundRect === "function") context.roundRect(label.left, label.top, label.right - label.left, label.bottom - label.top, 6);
@@ -3392,20 +3402,27 @@ function drawAtlasGlobeGraticules(context, globe, layer) {
   context.restore();
 }
 
-function drawAtlasGlobe(context, globe) {
+function drawAtlasGlobe(context, globe, time = 0, pointerWorld = null) {
   if (!globe) return;
   const { x, y, radius } = globe;
+  const now = time || performance.now();
+  const breath = state.reduceMotion ? 0.5 : (Math.sin(now / 1180) + 1) / 2;
+  const pointerDistance = pointerWorld ? Math.hypot(pointerWorld.x - x, pointerWorld.y - y) : Infinity;
+  const pointerInfluence = pointerDistance <= radius * 1.12 ? 1 - Math.min(1, pointerDistance / (radius * 1.12)) : 0;
+  const lightX = x - radius * 0.42 + (pointerWorld ? Math.max(-1, Math.min(1, (pointerWorld.x - x) / radius)) * radius * 0.12 * pointerInfluence : 0);
+  const lightY = y - radius * 0.46 + (pointerWorld ? Math.max(-1, Math.min(1, (pointerWorld.y - y) / radius)) * radius * 0.1 * pointerInfluence : 0);
   context.save();
   context.globalAlpha = 1;
 
-  const atmosphere = context.createRadialGradient(x, y, radius * 0.76, x, y, radius * 1.18);
+  const atmosphereRadius = radius * (1.16 + breath * 0.035 + pointerInfluence * 0.025);
+  const atmosphere = context.createRadialGradient(x, y, radius * 0.72, x, y, atmosphereRadius);
   atmosphere.addColorStop(0, "rgba(31, 132, 124, 0)");
-  atmosphere.addColorStop(0.68, "rgba(31, 132, 124, 0.018)");
-  atmosphere.addColorStop(0.86, "rgba(31, 132, 124, 0.09)");
+  atmosphere.addColorStop(0.68, `rgba(31, 132, 124, ${0.018 + breath * 0.012})`);
+  atmosphere.addColorStop(0.86, `rgba(31, 132, 124, ${0.075 + breath * 0.055 + pointerInfluence * 0.04})`);
   atmosphere.addColorStop(1, "rgba(31, 132, 124, 0)");
   context.fillStyle = atmosphere;
   context.beginPath();
-  context.arc(x, y, radius * 1.18, 0, Math.PI * 2);
+  context.arc(x, y, atmosphereRadius, 0, Math.PI * 2);
   context.fill();
 
   context.fillStyle = "rgba(30, 83, 80, 0.07)";
@@ -3420,8 +3437,8 @@ function drawAtlasGlobe(context, globe) {
   context.arc(x, y, radius, 0, Math.PI * 2);
   context.clip();
   const sphere = context.createRadialGradient(
-    x - radius * 0.42,
-    y - radius * 0.46,
+    lightX,
+    lightY,
     radius * 0.01,
     x + radius * 0.15,
     y + radius * 0.18,
@@ -3457,6 +3474,18 @@ function drawAtlasGlobe(context, globe) {
   sheen.addColorStop(1, "rgba(255,255,255,0)");
   context.fillStyle = sheen;
   context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+
+  if (!state.reduceMotion) {
+    const scanOffset = Math.sin(now / 1700) * radius * 0.42;
+    const scan = context.createLinearGradient(x - radius, y + scanOffset - radius * 0.2, x + radius, y + scanOffset + radius * 0.2);
+    scan.addColorStop(0, "rgba(255,255,255,0)");
+    scan.addColorStop(0.47, "rgba(173,235,226,0)");
+    scan.addColorStop(0.5, `rgba(173,235,226,${0.045 + pointerInfluence * 0.035})`);
+    scan.addColorStop(0.53, "rgba(173,235,226,0)");
+    scan.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = scan;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
   context.restore();
 
   drawAtlasGlobeGraticules(context, globe, "front");
@@ -3479,10 +3508,67 @@ function drawAtlasGlobe(context, globe) {
   context.arc(x, y, radius - 2, Math.PI * 1.04, Math.PI * 1.52);
   context.stroke();
 
-  context.strokeStyle = "rgba(45, 143, 133, 0.16)";
-  context.lineWidth = 5;
+  context.strokeStyle = `rgba(45, 143, 133, ${0.13 + breath * 0.09})`;
+  context.lineWidth = 4 + breath * 2;
   context.beginPath();
-  context.arc(x, y, radius + 2.5, Math.PI * 0.04, Math.PI * 0.74);
+  const rimPhase = state.reduceMotion ? Math.PI * 0.04 : now * 0.00022;
+  context.arc(x, y, radius + 2.5, rimPhase, rimPhase + Math.PI * 0.7);
+  context.stroke();
+  context.restore();
+}
+
+function atlasEdgePoint(first, second, globe, edgeDepth, progress) {
+  if (globe && first.globeSurface && second.globeSurface) {
+    const midpointX = (first.x + second.x) / 2;
+    const midpointY = (first.y + second.y) / 2;
+    const bend = edgeDepth < 0 ? 0.035 : 0.075;
+    const controlX = midpointX + (midpointX - globe.x) * bend;
+    const controlY = midpointY + (midpointY - globe.y) * bend;
+    const inverse = 1 - progress;
+    return {
+      x: inverse * inverse * first.x + 2 * inverse * progress * controlX + progress * progress * second.x,
+      y: inverse * inverse * first.y + 2 * inverse * progress * controlY + progress * progress * second.y,
+    };
+  }
+  return {
+    x: first.x + (second.x - first.x) * progress,
+    y: first.y + (second.y - first.y) * progress,
+  };
+}
+
+function drawAtlasEdgeSignal(context, first, second, globe, edgeDepth, edgeIndex, time, emphasized) {
+  if (state.reduceMotion || edgeDepth < -0.04) return false;
+  const cycle = 2200 + edgeIndex % 5 * 170;
+  const progress = ((time + edgeIndex * 347) % cycle) / cycle;
+  const point = atlasEdgePoint(first, second, globe, edgeDepth, progress);
+  const radius = emphasized ? 3.2 : 2.1;
+  const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius * 3.4);
+  glow.addColorStop(0, emphasized ? "rgba(255,255,255,.98)" : "rgba(222,250,245,.92)");
+  glow.addColorStop(0.28, `${second.color}${emphasized ? "cc" : "9a"}`);
+  glow.addColorStop(1, `${second.color}00`);
+  context.save();
+  context.globalAlpha = emphasized ? 0.96 : 0.68;
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(point.x, point.y, radius * 3.4, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "rgba(255,255,255,.92)";
+  context.beginPath();
+  context.arc(point.x, point.y, radius * 0.72, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+  return true;
+}
+
+function drawAtlasNodePulse(context, node, time, emphasized) {
+  if (state.reduceMotion) return;
+  const wave = (Math.sin(time / 440 + hashNumber(node.id) * 0.009) + 1) / 2;
+  context.save();
+  context.globalAlpha = emphasized ? 0.34 + wave * 0.26 : 0.09 + wave * 0.1;
+  context.strokeStyle = node.color;
+  context.lineWidth = emphasized ? 1.4 : 0.8;
+  context.beginPath();
+  context.arc(node.x, node.y, node.radius + 4 + wave * (emphasized ? 5 : 3), 0, Math.PI * 2);
   context.stroke();
   context.restore();
 }
@@ -3492,14 +3578,25 @@ function drawAtlas(time = 0) {
   const canvas = elements.knowledgeGraph;
   const context = canvas.getContext("2d");
   const width = canvas.clientWidth; const height = canvas.clientHeight;
+  const now = time || performance.now();
+  if (time && !state.reduceMotion && !state.atlasDrag && now - state.atlasAmbientFrameAt < 28) {
+    state.atlasFrame = requestAnimationFrame(drawAtlas);
+    return;
+  }
+  state.atlasAmbientFrameAt = now;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }
   context.setTransform(dpr, 0, 0, dpr, 0, 0); context.clearRect(0, 0, width, height);
   const animate = !state.reduceMotion && document.visibilityState === "visible" && !elements.readerDialog.open;
-  const globeMoving = updateAtlasGlobeMotion(time, width, height, animate);
+  const globeMoving = updateAtlasGlobeMotion(now, width, height, animate);
   const movement = animate && !state.atlasFixedLayout && state.atlasSimulationAlpha > 0.012 ? stepAtlasPhysics(width, height) : 0;
   const hoveredNode = atlasNodeAt(state.atlasPointer, width, height);
   const hoveredIndex = hoveredNode ? state.atlasNodes.indexOf(hoveredNode) : -1;
+  const hoveredId = hoveredNode?.id || null;
+  if (hoveredId !== state.atlasGlobeHoverId) {
+    state.atlasGlobeHoverId = hoveredId;
+    state.atlasGlobeHoverAt = now;
+  }
   const selectedIndex = state.atlasNodes.findIndex((node) => node.id === state.atlasSelectedPath || node.record.path === state.atlasSelectedPath);
   const persistentFocus = state.atlasFixedLayout && Boolean(state.atlasFocusId);
   const focusIndex = hoveredIndex >= 0 ? hoveredIndex : state.atlasFixedLayout ? -1 : selectedIndex;
@@ -3515,7 +3612,14 @@ function drawAtlas(time = 0) {
   context.translate(width / 2 + state.atlasCamera.x, height / 2 + state.atlasCamera.y);
   context.scale(state.atlasCamera.scale, state.atlasCamera.scale);
   context.translate(-width / 2, -height / 2);
-  drawAtlasGlobe(context, state.atlasGlobe);
+  const transitionProgress = state.reduceMotion ? 1 : Math.max(0, Math.min(1, (now - state.atlasTransitionAt) / 520));
+  const transitionEase = 1 - Math.pow(1 - transitionProgress, 3);
+  const transitionCenter = state.atlasGlobe || { x: width / 2, y: height / 2 };
+  context.translate(transitionCenter.x, transitionCenter.y + (1 - transitionEase) * 8);
+  context.scale(0.95 + transitionEase * 0.05, 0.95 + transitionEase * 0.05);
+  context.translate(-transitionCenter.x, -transitionCenter.y);
+  const pointerWorld = atlasScreenToWorld(state.atlasPointer, width, height);
+  drawAtlasGlobe(context, state.atlasGlobe, now, pointerWorld);
   (state.atlasLanes || []).forEach((lane) => {
     context.globalAlpha = 1;
     context.font = '650 10px "Microsoft YaHei UI", sans-serif';
@@ -3524,7 +3628,8 @@ function drawAtlas(time = 0) {
     context.fillStyle = ATLAS_COLORS[lane.kind] || "#168d7c";
     context.fillText(lane.label, lane.x, lane.y);
   });
-  state.atlasEdges.forEach((edge) => {
+  let activitySignals = 0;
+  state.atlasEdges.forEach((edge, edgeIndex) => {
     const first = state.atlasNodes[edge.a]; const second = state.atlasNodes[edge.b];
     const active = persistentFocus ? edge.focusRelated : focusIndex < 0 || connected.has(edge.a) && connected.has(edge.b);
     const edgeDepth = state.atlasGlobe ? (Number(first.globeDepth || 0) + Number(second.globeDepth || 0)) / 2 : 1;
@@ -3555,6 +3660,9 @@ function drawAtlas(time = 0) {
       );
     } else context.lineTo(second.x, second.y);
     context.stroke();
+    const emphasizedSignal = focusIndex >= 0 && connected.has(edge.a) && connected.has(edge.b);
+    const ambientSignal = focusIndex < 0 && edgeDepth > 0.025 && (edgeIndex + Math.floor(now / 1100)) % 7 < 2;
+    if (animate && (emphasizedSignal || ambientSignal) && drawAtlasEdgeSignal(context, first, second, state.atlasGlobe, edgeDepth, edgeIndex, now, emphasizedSignal)) activitySignals += 1;
   });
   context.setLineDash([]);
   const nodeRenderOrder = state.atlasNodes
@@ -3569,6 +3677,8 @@ function drawAtlas(time = 0) {
       ? globeDepth < 0 ? 0.055 + Math.max(0, globeDepth + 1) * 0.075 : 0.64 + Math.min(1, globeDepth) * 0.36
       : 1;
     context.globalAlpha = focusRelated ? nodeDepthAlpha : 0.11;
+    const ambientPulse = node.kind === "ontology" || node.kind === "project" || (node.kind === "scenario" && (hashNumber(node.id) + Math.floor(now / 900)) % 9 === 0);
+    if (animate && globeDepth > -0.02 && (active || selected || ambientPulse)) drawAtlasNodePulse(context, node, now, active || selected);
     if (selected) {
       context.strokeStyle = "rgba(13,117,107,.88)";
       context.lineWidth = 2.2;
@@ -3615,7 +3725,7 @@ function drawAtlas(time = 0) {
   globeLabels
     .slice()
     .sort((first, second) => Number(first.globeDepth || 0) - Number(second.globeDepth || 0))
-    .forEach((node) => drawAtlasGlobeLabel(context, node));
+    .forEach((node) => drawAtlasGlobeLabel(context, node, now));
   context.restore();
   context.globalAlpha = 1;
   const hovered = hoveredIndex >= 0 ? state.atlasNodes[hoveredIndex] : null;
@@ -3632,7 +3742,11 @@ function drawAtlas(time = 0) {
   }
   canvas.dataset.zoom = state.atlasCamera.scale.toFixed(3);
   canvas.dataset.labeledNodes = String(globeLabels.length);
-  const keepAnimating = animate && (globeMoving || state.atlasSimulationAlpha > 0.02 || movement > 0.025);
+  canvas.dataset.activitySignals = String(activitySignals);
+  canvas.dataset.hoverNode = state.atlasGlobeHoverId || "";
+  canvas.dataset.transitionProgress = transitionProgress.toFixed(3);
+  const ambientActive = animate && Boolean(state.atlasGlobe || state.atlasFocusId);
+  const keepAnimating = animate && (ambientActive || transitionProgress < 1 || globeMoving || state.atlasSimulationAlpha > 0.02 || movement > 0.025);
   state.atlasFrame = keepAnimating ? requestAnimationFrame(drawAtlas) : null;
 }
 
