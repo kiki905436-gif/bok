@@ -2714,6 +2714,26 @@ body .atlas-stage[data-atlas-mode="overview"] {
     linear-gradient(145deg, rgba(250, 250, 247, 0.98), rgba(244, 247, 243, 0.96));
 }
 
+body .atlas-stage[data-atlas-mode="overview"]::before {
+  position: absolute;
+  z-index: 0;
+  inset: -18%;
+  display: block;
+  background:
+    radial-gradient(circle at 38% 42%, rgba(92, 187, 174, 0.12), transparent 24%),
+    radial-gradient(circle at 66% 60%, rgba(79, 120, 215, 0.075), transparent 27%),
+    radial-gradient(circle at 52% 52%, rgba(255, 255, 255, 0.76), transparent 48%);
+  opacity: 0.58;
+  pointer-events: none;
+  transform: translate3d(-1.5%, -1%, 0) scale(1.02);
+  animation: atlasAmbientDrift 12s ease-in-out infinite alternate;
+  content: "";
+}
+
+body .atlas-stage[data-atlas-mode="overview"]:hover::before {
+  opacity: 0.82;
+}
+
 .atlas-gesture-hint {
   position: absolute;
   z-index: 3;
@@ -2759,11 +2779,48 @@ body .atlas-stage[data-atlas-mode="overview"] {
 }
 
 body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-one {
-  opacity: 0;
+  display: block;
+  width: 70%;
+  height: 43%;
+  border-color: rgba(35, 139, 129, 0.17);
+  opacity: 0.44;
+  box-shadow: 0 0 28px rgba(35, 139, 129, 0.055);
+  animation: atlasOrbitOne 18s linear infinite;
 }
 
 body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-two {
-  opacity: 0;
+  display: block;
+  width: 52%;
+  height: 31%;
+  border-color: rgba(79, 120, 215, 0.13);
+  border-style: dashed;
+  opacity: 0.38;
+  animation: atlasOrbitTwo 14s linear infinite reverse;
+}
+
+@keyframes atlasAmbientDrift {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to { transform: translate3d(1.5%, 1%, 0) scale(1.06); }
+}
+
+@keyframes atlasOrbitOne {
+  from { transform: translate(-50%, -50%) rotate(-10deg); }
+  to { transform: translate(-50%, -50%) rotate(350deg); }
+}
+
+@keyframes atlasOrbitTwo {
+  from { transform: translate(-50%, -50%) rotate(14deg) scale(0.98); }
+  to { transform: translate(-50%, -50%) rotate(374deg) scale(1.03); }
+}
+
+.atlas-stage[data-motion="ambient"] .atlas-gesture-hint > span {
+  transform-origin: center;
+  animation: atlasGestureBreath 3.8s ease-in-out infinite;
+}
+
+@keyframes atlasGestureBreath {
+  0%, 100% { opacity: 0.58; transform: rotate(-8deg) scale(0.94); }
+  50% { opacity: 1; transform: rotate(12deg) scale(1.08); }
 }
 
 body .atlas-stage[data-atlas-mode="focus"] {
@@ -3087,7 +3144,11 @@ body .atlas-stage[data-atlas-mode="focus"] {
 
 @media (max-width: 620px) {
   body .atlas-stage {
-    min-height: 1060px;
+    min-height: 900px;
+  }
+
+  body .atlas-stage[data-atlas-mode="overview"] {
+    min-height: 900px;
   }
 
   .atlas-project-tree {
@@ -3103,5 +3164,14 @@ body .atlas-stage[data-atlas-mode="focus"] {
     right: 12px;
     bottom: 62px;
     max-width: calc(100% - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .atlas-stage[data-atlas-mode="overview"]::before,
+  body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-one,
+  body .atlas-stage[data-atlas-mode="overview"] .atlas-orbit-two,
+  .atlas-stage[data-motion="ambient"] .atlas-gesture-hint > span {
+    animation: none;
   }
 }
